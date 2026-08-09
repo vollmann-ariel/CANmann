@@ -1310,17 +1310,17 @@
     refreshVarListIfVisible();
   }
 
+  function refreshVarListIfVisible() {
+    if (!state.varStats) return;
+    const block = document.querySelector('.block[data-block="variations"]');
+    if (block && !block.classList.contains("collapsed")) renderVarList();
+  }
+
   function toggleSignalInChart(channel, id, signalName, opts) {
     const key = channel + ":" + id + ":" + signalName;
     if (state.chart.series.has(key)) removeSignalFromChart(key);
     else addSignalToChart(channel, id, signalName);
     if (opts && opts.switchTab) setTab("graficas");
-  }
-
-  function refreshVarListIfVisible() {
-    if (!state.varStats) return;
-    const block = document.querySelector('.block[data-block="variations"]');
-    if (block && !block.classList.contains("collapsed")) renderVarList();
   }
 
   function resetChartSeries() {
