@@ -1,0 +1,1008 @@
+<title>CANmann — Visor de trazas CAN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #eef0f0;
+    --surface: #ffffff;
+    --surface-2: #e4e7e7;
+    --surface-3: #d7dbdb;
+    --border: #d3d7d7;
+    --ink: #1a1d1f;
+    --ink-dim: #5b6266;
+    --ink-faint: #8b9296;
+    --accent: #b96a1f;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(185, 106, 31, 0.12);
+    --accent-soft-2: rgba(185, 106, 31, 0.22);
+    --cyan: #2f8794;
+    --ok: #2f8a52;
+    --warn: #a67818;
+    --critical: #b8443c;
+    --shadow: 0 1px 2px rgba(20, 22, 20, 0.06), 0 4px 16px rgba(20, 22, 20, 0.05);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151a;
+      --surface: #1b2027;
+      --surface-2: #232933;
+      --surface-3: #2c333d;
+      --border: #2c333d;
+      --ink: #e7e5df;
+      --ink-dim: #9aa1ab;
+      --ink-faint: #626a74;
+      --accent: #d98c3d;
+      --accent-ink: #1b1300;
+      --accent-soft: rgba(217, 140, 61, 0.14);
+      --accent-soft-2: rgba(217, 140, 61, 0.26);
+      --cyan: #5fb8c4;
+      --ok: #55a56f;
+      --warn: #d9b23d;
+      --critical: #d97369;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1b2027; --surface-2: #232933; --surface-3: #2c333d; --border: #2c333d;
+    --ink: #e7e5df; --ink-dim: #9aa1ab; --ink-faint: #626a74;
+    --accent: #d98c3d; --accent-ink: #1b1300; --accent-soft: rgba(217,140,61,.14); --accent-soft-2: rgba(217,140,61,.26);
+    --cyan: #5fb8c4; --ok: #55a56f; --warn: #d9b23d; --critical: #d97369;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef0f0; --surface: #ffffff; --surface-2: #e4e7e7; --surface-3: #d7dbdb; --border: #d3d7d7;
+    --ink: #1a1d1f; --ink-dim: #5b6266; --ink-faint: #8b9296;
+    --accent: #b96a1f; --accent-ink: #ffffff; --accent-soft: rgba(185,106,31,.12); --accent-soft-2: rgba(185,106,31,.22);
+    --cyan: #2f8794; --ok: #2f8a52; --warn: #a67818; --critical: #b8443c;
+    --shadow: 0 1px 2px rgba(20,22,20,.06), 0 4px 16px rgba(20,22,20,.05); color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono {
+    font-family: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  ::selection { background: var(--accent-soft-2); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; } }
+
+  .app { height: 100vh; display: flex; flex-direction: column; }
+
+  /* ---------- Topbar ---------- */
+  .topbar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex: 0 0 auto;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand h1 {
+    margin: 0; font: 800 17px/1 "Segoe UI Semibold", "Segoe UI", sans-serif;
+    letter-spacing: 0.02em; color: var(--ink);
+  }
+  .brand h1 span { color: var(--accent); }
+  .brand .tagline { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+  .wave { display: block; }
+
+  .stats-strip { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .stat-chip {
+    display: flex; flex-direction: column; align-items: flex-end;
+    padding: 4px 10px; border-radius: 6px; background: var(--surface-2);
+    border: 1px solid var(--border); min-width: 74px;
+  }
+  .stat-chip b { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; }
+  .stat-chip span { font-size: 9.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+  .theme-note { display: none; }
+
+  /* ---------- Layout ---------- */
+  .workspace { flex: 1 1 auto; display: flex; min-height: 0; }
+  .rail { flex: 0 0 auto; background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+  .rail-left { width: 300px; border-right: 1px solid var(--border); }
+  .rail-right { width: 340px; border-left: 1px solid var(--border); }
+  .trace-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+
+  section.block { border-bottom: 1px solid var(--border); padding: 12px 14px; }
+  .block h2 {
+    margin: 0 0 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-faint); font-weight: 700;
+  }
+
+  /* ---------- Drop zones ---------- */
+  .dropzone {
+    border: 1.5px dashed var(--border); border-radius: 8px; padding: 12px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    color: var(--ink-dim); font-size: 12px;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+  .dropzone strong { color: var(--accent); font-weight: 600; }
+  .dropzone input { display: none; }
+
+  .file-pill-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .file-pill {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font-size: 11.5px;
+  }
+  .file-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
+  .file-pill .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .file-pill .meta { color: var(--ink-faint); font-size: 10.5px; flex: 0 0 auto; }
+  .file-pill button { background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+  .file-pill button:hover { color: var(--critical); background: var(--surface-3); }
+
+  .chan-map-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11.5px; }
+  .chan-map-row .chan-badge {
+    font-family: inherit; font-weight: 700; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px; min-width: 20px; text-align: center;
+  }
+  .chan-map-row select { flex: 1 1 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px; }
+
+  /* ---------- Message list ---------- */
+  .msg-search {
+    width: 100%; padding: 6px 9px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--ink); margin-bottom: 8px;
+  }
+  .msg-list-wrap { flex: 1 1 auto; overflow-y: auto; padding: 0 6px 10px; }
+  .msg-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    position: relative; margin-bottom: 2px;
+  }
+  .msg-row:hover { background: var(--surface-2); }
+  .msg-row.active { background: var(--accent-soft-2); }
+  .msg-row .status-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+  .status-dot.ok { background: var(--ok); }
+  .status-dot.unknown { background: var(--critical); }
+  .msg-row .body { flex: 1 1 auto; min-width: 0; }
+  .msg-row .name { font-weight: 600; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-row .sub { font-size: 10px; color: var(--ink-faint); display: flex; gap: 6px; }
+  .msg-row .count { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; }
+  .msg-row .freqbar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); opacity: .5; border-radius: 0 0 6px 6px; }
+
+  /* ---------- Trace toolbar ---------- */
+  .toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    border-bottom: 1px solid var(--border); background: var(--surface); flex: 0 0 auto; flex-wrap: wrap;
+  }
+  .search-box { position: relative; flex: 1 1 220px; max-width: 340px; }
+  .search-box input {
+    width: 100%; padding: 6px 10px 6px 28px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--ink);
+  }
+  .search-box svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); opacity: .5; }
+  .toolbar select {
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+  }
+  .toggle {
+    display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); cursor: pointer; user-select: none;
+  }
+  .toggle input { accent-color: var(--accent); }
+  .playbar { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .iconbtn {
+    display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+    border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); cursor: pointer;
+  }
+  .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .iconbtn.playing { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .result-count { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+
+  /* ---------- Trace table ---------- */
+  .trace-table { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+  .trace-cols { display: grid; grid-template-columns: 96px 44px 40px 96px 1fr 40px 210px; }
+  .trace-head {
+    padding: 7px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint);
+    border-bottom: 1px solid var(--border); background: var(--surface); font-weight: 700;
+  }
+  .trace-head > div { padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trace-viewport { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; position: relative; }
+  .trace-spacer { position: relative; }
+  .trace-rows { position: absolute; left: 0; right: 0; top: 0; }
+  .trace-row {
+    display: grid; grid-template-columns: 96px 44px 40px 96px 1fr 40px 210px;
+    padding: 0 14px; align-items: center; cursor: pointer; border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+  }
+  .trace-row:hover { background: var(--surface-2); }
+  .trace-row.selected { background: var(--accent-soft-2); }
+  .trace-row.playhead { box-shadow: inset 2px 0 0 var(--accent); }
+  .trace-row > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+  .trace-row .c-dir { color: var(--ink-faint); }
+  .trace-row .c-name { color: var(--ink-dim); }
+  .trace-row .c-name.unknown { color: var(--ink-faint); font-style: italic; }
+  .trace-row .c-data { color: var(--ink-dim); }
+  .chan-tag {
+    display: inline-block; min-width: 16px; text-align: center; font-weight: 700; font-size: 10px;
+    background: var(--surface-3); border-radius: 4px; padding: 1px 4px;
+  }
+
+  .empty-hint {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center; color: var(--ink-faint);
+    font-size: 13px; text-align: center; padding: 40px;
+  }
+
+  /* ---------- Signal panel ---------- */
+  .sig-panel { flex: 1 1 auto; overflow-y: auto; padding: 14px; }
+  .sig-empty { color: var(--ink-faint); font-size: 12px; padding: 10px 2px; }
+  .sig-header { margin-bottom: 12px; }
+  .sig-header .msgname { font-size: 15px; font-weight: 800; letter-spacing: .01em; }
+  .sig-header .msgname.unknown { color: var(--critical); }
+  .sig-header .msgmeta { font-size: 11px; color: var(--ink-faint); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .sig-header .comment { font-size: 11px; color: var(--ink-dim); margin-top: 6px; font-style: italic; }
+  .badge {
+    display: inline-block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em;
+    padding: 2px 6px; border-radius: 4px; font-weight: 700;
+  }
+  .badge.warn { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+  .badge.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+
+  .raw-bytes { display: flex; gap: 4px; margin: 10px 0 14px; flex-wrap: wrap; }
+  .raw-byte {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 6px; font-size: 11px; min-width: 26px; text-align: center;
+  }
+
+  .sig-table { display: flex; flex-direction: column; gap: 2px; }
+  .sig-row { padding: 8px 8px; border-radius: 6px; border: 1px solid transparent; }
+  .sig-row:hover { background: var(--surface-2); border-color: var(--border); }
+  .sig-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .sig-row .sname { font-weight: 600; font-size: 12px; }
+  .sig-row .sval { font-weight: 700; font-size: 12.5px; color: var(--accent); white-space: nowrap; }
+  .sig-row .sval .unit { color: var(--ink-faint); font-weight: 600; font-size: 10.5px; margin-left: 3px; }
+  .sig-row .sraw { font-size: 10px; color: var(--ink-faint); margin-top: 2px; }
+  .sig-row .scomment { font-size: 10.5px; color: var(--ink-dim); margin-top: 3px; }
+  .mux-note { font-size: 10.5px; color: var(--cyan); margin-bottom: 8px; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <canvas class="wave" id="waveCanvas" width="46" height="28" aria-hidden="true"></canvas>
+      <div>
+        <h1>CAN<span>mann</span></h1>
+        <div class="tagline">Visor de trazas CAN · decodificación DBC</div>
+      </div>
+    </div>
+    <div class="stats-strip" id="statsStrip"></div>
+  </header>
+
+  <div class="workspace">
+    <aside class="rail rail-left">
+      <section class="block">
+        <h2>1 · Archivos DBC</h2>
+        <label class="dropzone" id="dbcDrop">
+          <div><strong>Elegí archivos</strong> o arrastralos acá</div>
+          <div style="margin-top:2px;font-size:10.5px">Uno por bus (CAN1, CAN2, CAN3…)</div>
+          <input type="file" id="dbcInput" accept=".dbc" multiple />
+        </label>
+        <div class="file-pill-list" id="dbcList"></div>
+      </section>
+
+      <section class="block">
+        <h2>2 · Log CAN</h2>
+        <label class="dropzone" id="logDrop">
+          <div><strong>Elegí un archivo</strong> o arrastralo acá</div>
+          <div style="margin-top:2px;font-size:10.5px">.csv (formato CANmann) o .asc (Vector ASCII)</div>
+          <input type="file" id="logInput" accept=".csv,.asc,.txt" />
+        </label>
+        <div class="file-pill-list" id="logList"></div>
+      </section>
+
+      <section class="block" id="chanMapBlock" style="display:none">
+        <h2>3 · Canal → DBC</h2>
+        <div id="chanMap"></div>
+      </section>
+
+      <section class="block" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
+        <h2>Mensajes vistos</h2>
+        <input class="msg-search" id="msgSearch" placeholder="Buscar por ID o nombre…" />
+        <div class="msg-list-wrap" id="msgList"></div>
+      </section>
+    </aside>
+
+    <main class="trace-pane">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input id="traceSearch" placeholder="Filtrar traza: ID, nombre, canal…" />
+        </div>
+        <select id="chanFilter"><option value="">Todos los canales</option></select>
+        <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Solo decodificados</label>
+        <span class="result-count" id="resultCount"></span>
+        <div class="playbar">
+          <button class="iconbtn" id="stepBackBtn" title="Mensaje anterior">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6L10 12l10 6z"/></svg>
+          </button>
+          <button class="iconbtn" id="playBtn" title="Reproducir / pausar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="iconbtn" id="stepFwdBtn" title="Mensaje siguiente">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2v12h2zM4 6l10 6-10 6z"/></svg>
+          </button>
+          <select id="speedSel">
+            <option value="1">1×</option>
+            <option value="5" selected>5×</option>
+            <option value="25">25×</option>
+            <option value="100">100×</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="trace-table">
+        <div class="trace-cols trace-head">
+          <div>Tiempo</div><div>Can</div><div>Dir</div><div>ID</div><div>Mensaje</div><div>DLC</div><div>Datos</div>
+        </div>
+        <div class="trace-viewport" id="traceViewport">
+          <div class="trace-spacer" id="traceSpacer">
+            <div class="trace-rows" id="traceRows"></div>
+          </div>
+        </div>
+        <div class="empty-hint" id="emptyHint">
+          Cargá al menos un archivo DBC y un log CAN para empezar.<br />
+          Podés usar los mismos archivos de tu carpeta CANmann (por ejemplo <span class="mono">output.csv</span> o <span class="mono">asc_file.asc</span>).
+        </div>
+      </div>
+    </main>
+
+    <aside class="rail rail-right">
+      <div class="sig-panel" id="sigPanel">
+        <div class="sig-empty">Elegí un mensaje de la traza para ver sus señales decodificadas.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================
+   * DBC parsing + signal decoding (validado contra cantools)
+   * ========================================================= */
+  function parseDBC(text) {
+    const messages = new Map();
+    const nodes = [];
+
+    const cmBoRe = /^CM_\s+BO_\s+(\d+)\s+"([^"]*)"\s*;/gm;
+    const cmSgRe = /^CM_\s+SG_\s+(\d+)\s+(\w+)\s+"([^"]*)"\s*;/gm;
+    const valRe = /^VAL_\s+(\d+)\s+(\w+)\s+([\s\S]*?);/gm;
+
+    const pendingBoComments = new Map();
+    const pendingSgComments = new Map();
+    let m;
+    while ((m = cmBoRe.exec(text))) pendingBoComments.set(parseInt(m[1], 10) & 0x1fffffff, m[2]);
+    while ((m = cmSgRe.exec(text))) pendingSgComments.set((parseInt(m[1], 10) & 0x1fffffff) + "::" + m[2], m[3]);
+
+    const pendingVal = [];
+    while ((m = valRe.exec(text))) {
+      const id = parseInt(m[1], 10) & 0x1fffffff;
+      const table = new Map();
+      const pairRe = /(-?\d+)\s+"([^"]*)"/g;
+      let pm;
+      while ((pm = pairRe.exec(m[3]))) table.set(parseInt(pm[1], 10), pm[2]);
+      pendingVal.push({ id, sigName: m[2], table });
+    }
+
+    const lines = text.split(/\r?\n/);
+    const boRe = /^BO_\s+(\d+)\s+([\w-]+)\s*:\s*(\d+)\s+(\S+)/;
+    const sgRe = /^\s*SG_\s+([\w-]+)\s*(M|m\d+)?\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]*)\|([^\]]*)\]\s*"([^"]*)"\s*(.*)$/;
+    const buRe = /^BU_\s*:\s*(.*)/;
+
+    let cur = null;
+    for (const line of lines) {
+      if ((m = buRe.exec(line))) { nodes.push(...m[1].trim().split(/\s+/).filter(Boolean)); continue; }
+      if ((m = boRe.exec(line))) {
+        const idRaw = parseInt(m[1], 10);
+        const id = idRaw & 0x1fffffff;
+        cur = {
+          id, isExtended: (idRaw & 0x80000000) !== 0, name: m[2], dlc: parseInt(m[3], 10), sender: m[4],
+          signals: [], comment: pendingBoComments.get(id) || null, isMultiplexed: false,
+        };
+        messages.set(id, cur);
+        continue;
+      }
+      if (cur && (m = sgRe.exec(line))) {
+        const [, name, muxRaw, startBit, length, order, sign, factor, offset, min, max, unit, receiversRaw] = m;
+        let isMultiplexor = false, muxValue = null;
+        if (muxRaw === "M") isMultiplexor = true;
+        else if (muxRaw && muxRaw[0] === "m") muxValue = parseInt(muxRaw.slice(1), 10);
+        if (isMultiplexor || muxValue !== null) cur.isMultiplexed = true;
+        cur.signals.push({
+          name, startBit: parseInt(startBit, 10), length: parseInt(length, 10),
+          byteOrder: order === "1" ? "intel" : "motorola", signed: sign === "-",
+          factor: parseFloat(factor), offset: parseFloat(offset), min: parseFloat(min), max: parseFloat(max),
+          unit, receivers: receiversRaw.split(",").map((s) => s.trim()).filter(Boolean),
+          isMultiplexor, muxValue, comment: pendingSgComments.get(cur.id + "::" + name) || null, valueTable: null,
+        });
+      }
+    }
+    for (const { id, sigName, table } of pendingVal) {
+      const msg = messages.get(id);
+      const sig = msg && msg.signals.find((s) => s.name === sigName);
+      if (sig) sig.valueTable = table;
+    }
+    return { messages, nodes };
+  }
+
+  function getBit(data, globalBit) {
+    const byteIdx = globalBit >> 3;
+    if (byteIdx >= data.length) return 0;
+    return (data[byteIdx] >> (globalBit & 7)) & 1;
+  }
+  function signalMaxBit(sig) {
+    if (sig.byteOrder === "intel") return sig.startBit + sig.length - 1;
+    const byteIndex = sig.startBit >> 3, bitInByte = sig.startBit & 7;
+    return byteIndex * 8 + (7 - bitInByte);
+  }
+  function signalFitsData(sig, data) { return signalMaxBit(sig) < data.length * 8; }
+
+  function rawSignalValue(data, sig) {
+    let value = 0n;
+    if (sig.byteOrder === "intel") {
+      for (let i = 0; i < sig.length; i++) if (getBit(data, sig.startBit + i)) value |= 1n << BigInt(i);
+    } else {
+      const byteIndex = sig.startBit >> 3, bitInByte = sig.startBit & 7;
+      const msbGlobal = byteIndex * 8 + (7 - bitInByte);
+      for (let i = 0; i < sig.length; i++) {
+        const pos = msbGlobal - i;
+        value = (value << 1n) | BigInt(pos >= 0 ? getBit(data, pos) : 0);
+      }
+    }
+    if (sig.signed && sig.length > 0) {
+      const signBit = 1n << BigInt(sig.length - 1);
+      if (value & signBit) value -= 1n << BigInt(sig.length);
+    }
+    return value;
+  }
+  function decodeSignal(data, sig) {
+    const raw = rawSignalValue(data, sig);
+    return { raw: Number(raw), value: Number(raw) * sig.factor + sig.offset };
+  }
+  function decodeMessage(dbc, id, data) {
+    const msg = dbc.messages.get(id);
+    if (!msg) return null;
+    const results = [];
+    let muxVal = null;
+    if (msg.isMultiplexed) {
+      const muxSig = msg.signals.find((s) => s.isMultiplexor);
+      if (muxSig) muxVal = decodeSignal(data, muxSig).raw;
+    }
+    for (const sig of msg.signals) {
+      if (sig.muxValue !== null && sig.muxValue !== muxVal) continue;
+      if (!signalFitsData(sig, data)) continue;
+      const { raw, value } = decodeSignal(data, sig);
+      results.push({ name: sig.name, raw, value, unit: sig.unit, label: sig.valueTable && sig.valueTable.has(raw) ? sig.valueTable.get(raw) : null, comment: sig.comment, isMultiplexor: sig.isMultiplexor });
+    }
+    return { message: msg, signals: results, muxVal };
+  }
+
+  /* =========================================================
+   * Log parsers
+   * ========================================================= */
+  function parseCSVLog(text) {
+    const lines = text.split(/\r?\n/);
+    const trace = [];
+    let start = 0;
+    if (lines.length && /^\s*timestamp\s*,/i.test(lines[0])) start = 1;
+    for (let i = start; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+      const c1 = line.indexOf(","); if (c1 < 0) continue;
+      const c2 = line.indexOf(",", c1 + 1); if (c2 < 0) continue;
+      const c3 = line.indexOf(",", c2 + 1); if (c3 < 0) continue;
+      const ts = parseFloat(line.slice(0, c1));
+      const idStr = line.slice(c1 + 1, c2).trim();
+      const dlc = parseInt(line.slice(c2 + 1, c3), 10);
+      const dataStr = line.slice(c3 + 1).trim();
+      if (!isFinite(ts) || !idStr) continue;
+      const id = parseInt(idStr.replace(/^0x/i, ""), 16);
+      const bytes = dataStr.length ? dataStr.split(/\s+/).map((h) => parseInt(h, 16)) : [];
+      trace.push({ t: ts, channel: 0, dir: "Rx", id, ext: id > 0x7ff, dlc: isFinite(dlc) ? dlc : bytes.length, data: Uint8Array.from(bytes) });
+    }
+    return trace;
+  }
+
+  function parseASCLog(text) {
+    const lines = text.split(/\r?\n/);
+    const trace = [];
+    let t0 = null;
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 7) continue;
+      if (parts[3] !== "Rx" && parts[3] !== "Tx") continue;
+      if (parts[4] !== "d" && parts[4] !== "D") continue;
+      const t = parseFloat(parts[0]);
+      const channel = parseInt(parts[1], 10);
+      let idTok = parts[2];
+      let ext = false;
+      if (/x$/i.test(idTok)) { ext = true; idTok = idTok.slice(0, -1); }
+      const id = parseInt(idTok, 16);
+      const dlc = parseInt(parts[5], 10);
+      if (!isFinite(t) || !isFinite(channel) || !isFinite(id) || !isFinite(dlc)) continue;
+      const bytes = [];
+      for (let i = 0; i < dlc && 6 + i < parts.length; i++) bytes.push(parseInt(parts[6 + i], 16));
+      if (t0 === null) t0 = 0;
+      trace.push({ t, channel, dir: parts[3], id, ext, dlc, data: Uint8Array.from(bytes) });
+    }
+    return trace;
+  }
+
+  function detectAndParseLog(fileName, text) {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith(".csv")) return parseCSVLog(text);
+    if (lower.endsWith(".asc") || lower.endsWith(".txt")) return parseASCLog(text);
+    // sniff
+    if (/^\s*timestamp\s*,/i.test(text)) return parseCSVLog(text);
+    return parseASCLog(text);
+  }
+
+  /* =========================================================
+   * App state
+   * ========================================================= */
+  const state = {
+    dbcs: [],            // { fileName, dbc, msgCount, sigCount }
+    channelDbcIdx: new Map(),
+    trace: [],
+    channels: [],
+    msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
+    filtered: null,       // array of row indices, or null = all
+    t0: 0,                 // trace start time, for display as relative seconds
+    selectedRow: null,
+    selectedMessageKey: null,
+    playing: false,
+    playTimer: null,
+  };
+
+  const ROW_H = 25;
+  const el = (id) => document.getElementById(id);
+
+  /* ---------- decorative CAN waveform ---------- */
+  (function drawWave() {
+    const c = el("waveCanvas"), ctx = c.getContext("2d");
+    const w = c.width, h = c.height;
+    const styles = getComputedStyle(document.documentElement);
+    function pick(name) { return styles.getPropertyValue(name).trim() || "#d98c3d"; }
+    ctx.clearRect(0, 0, w, h);
+    const bits = [1, 1, 0, 0, 1, 0, 1, 1, 1, 0];
+    const bw = w / bits.length;
+    ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    // CAN_H (accent)
+    ctx.strokeStyle = pick("--accent"); ctx.beginPath();
+    let y = bits[0] ? 8 : 18;
+    ctx.moveTo(0, y);
+    bits.forEach((b, i) => { const yy = b ? 8 : 18; ctx.lineTo(i * bw, yy); ctx.lineTo((i + 1) * bw, yy); });
+    ctx.stroke();
+    // CAN_L (cyan)
+    ctx.strokeStyle = pick("--cyan"); ctx.beginPath();
+    y = bits[0] ? 20 : 10;
+    ctx.moveTo(0, y);
+    bits.forEach((b, i) => { const yy = b ? 20 : 10; ctx.lineTo(i * bw, yy); ctx.lineTo((i + 1) * bw, yy); });
+    ctx.stroke();
+  })();
+
+  /* ---------- DBC loading ---------- */
+  function renderDbcList() {
+    const list = el("dbcList");
+    list.innerHTML = "";
+    state.dbcs.forEach((d, i) => {
+      const pill = document.createElement("div");
+      pill.className = "file-pill";
+      pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${d.msgCount} msg</span><button title="Quitar">✕</button>`;
+      pill.querySelector("button").onclick = () => { state.dbcs.splice(i, 1); renderDbcList(); rebuildChannelMap(); recomputeAll(); };
+      list.appendChild(pill);
+    });
+    renderChannelMapBlock();
+  }
+
+  function addDbcFile(fileName, text) {
+    let dbc;
+    try { dbc = parseDBC(text); } catch (e) { alert("No se pudo interpretar " + fileName + ": " + e.message); return; }
+    let sigCount = 0;
+    dbc.messages.forEach((m) => (sigCount += m.signals.length));
+    state.dbcs.push({ fileName, dbc, msgCount: dbc.messages.size, sigCount });
+    renderDbcList();
+    rebuildChannelMap();
+    recomputeAll();
+  }
+
+  function rebuildChannelMap() {
+    // auto-assign: try filename "CANn" -> channel n; else 1 dbc -> all channels
+    state.channelDbcIdx.clear();
+    if (state.dbcs.length === 0) return;
+    const byNum = new Map();
+    state.dbcs.forEach((d, i) => {
+      const m = d.fileName.match(/can\s*0*([1-9]\d*)/i);
+      if (m) byNum.set(parseInt(m[1], 10), i);
+    });
+    for (const ch of state.channels) {
+      if (byNum.has(ch)) state.channelDbcIdx.set(ch, byNum.get(ch));
+      else if (state.dbcs.length === 1) state.channelDbcIdx.set(ch, 0);
+      else if (byNum.has(0) === false && state.channelDbcIdx.has(ch) === false) state.channelDbcIdx.set(ch, byNum.size ? (byNum.get(ch) ?? 0) : 0);
+    }
+  }
+
+  function renderChannelMapBlock() {
+    const block = el("chanMapBlock"), wrap = el("chanMap");
+    if (state.channels.length === 0 || state.dbcs.length === 0) { block.style.display = "none"; return; }
+    block.style.display = "";
+    wrap.innerHTML = "";
+    state.channels.forEach((ch) => {
+      const row = document.createElement("div");
+      row.className = "chan-map-row";
+      const sel = document.createElement("select");
+      sel.innerHTML = '<option value="-1">— sin decodificar —</option>' + state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
+      sel.value = state.channelDbcIdx.has(ch) ? state.channelDbcIdx.get(ch) : -1;
+      sel.onchange = () => { if (sel.value === "-1") state.channelDbcIdx.delete(ch); else state.channelDbcIdx.set(ch, parseInt(sel.value, 10)); recomputeAll(); };
+      row.innerHTML = `<span class="chan-badge">${ch}</span>`;
+      row.appendChild(sel);
+      wrap.appendChild(row);
+    });
+  }
+
+  function dbcForChannel(ch) {
+    const idx = state.channelDbcIdx.get(ch);
+    if (idx === undefined || idx < 0 || !state.dbcs[idx]) return null;
+    return state.dbcs[idx].dbc;
+  }
+
+  /* ---------- Log loading ---------- */
+  function renderLogList(fileName, count) {
+    const list = el("logList");
+    list.innerHTML = "";
+    if (!fileName) return;
+    const pill = document.createElement("div");
+    pill.className = "file-pill";
+    pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(fileName)}</span><span class="meta">${count.toLocaleString("es-AR")} msj.</span><button title="Quitar">✕</button>`;
+    pill.querySelector("button").onclick = () => { state.trace = []; state.channels = []; renderLogList(null, 0); recomputeAll(); };
+    list.appendChild(pill);
+  }
+
+  function loadLogFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const trace = detectAndParseLog(file.name, reader.result);
+      trace.sort((a, b) => a.t - b.t);
+      state.trace = trace;
+      state.t0 = trace.length ? trace[0].t : 0;
+      state.channels = [...new Set(trace.map((r) => r.channel))].sort((a, b) => a - b);
+      renderLogList(file.name, trace.length);
+      rebuildChannelMap();
+      renderChannelMapBlock();
+      populateChannelFilter();
+      recomputeAll();
+    };
+    reader.readAsText(file, "windows-1252");
+  }
+
+  function populateChannelFilter() {
+    const sel = el("chanFilter");
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos los canales</option>' + state.channels.map((c) => `<option value="${c}">Canal ${c}</option>`).join("");
+    sel.value = state.channels.includes(parseInt(cur, 10)) ? cur : "";
+  }
+
+  /* ---------- message index / stats ---------- */
+  function recomputeAll() {
+    buildMessageIndex();
+    renderStats();
+    renderMessageList();
+    applyFilter();
+    renderSignalPanelFor(state.selectedRow);
+  }
+
+  function buildMessageIndex() {
+    const idx = new Map();
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      const key = r.channel + ":" + r.id;
+      let e = idx.get(key);
+      if (!e) {
+        const dbc = dbcForChannel(r.channel);
+        const def = dbc ? dbc.messages.get(r.id) : null;
+        e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null };
+        idx.set(key, e);
+      }
+      e.count++;
+      e.lastRow = i;
+    }
+    state.msgIndex = idx;
+  }
+
+  function renderStats() {
+    const strip = el("statsStrip");
+    if (state.trace.length === 0) { strip.innerHTML = ""; return; }
+    const n = state.trace.length;
+    const dur = state.trace[n - 1].t - state.trace[0].t;
+    const uniq = state.msgIndex.size;
+    let decoded = 0;
+    state.msgIndex.forEach((e) => { if (e.name) decoded++; });
+    const pct = uniq ? Math.round((decoded / uniq) * 100) : 0;
+    const chip = (val, label) => `<div class="stat-chip"><b>${val}</b><span>${label}</span></div>`;
+    strip.innerHTML =
+      chip(n.toLocaleString("es-AR"), "mensajes") +
+      chip(dur.toFixed(1) + "s", "duración") +
+      chip(uniq, "IDs únicos") +
+      chip(pct + "%", "decodificado");
+  }
+
+  function renderMessageList() {
+    const wrap = el("msgList");
+    const q = (el("msgSearch").value || "").toLowerCase();
+    const entries = [...state.msgIndex.values()].sort((a, b) => b.count - a.count);
+    const maxCount = entries.length ? entries[0].count : 1;
+    wrap.innerHTML = "";
+    for (const e of entries) {
+      const hexId = "0x" + e.id.toString(16).toUpperCase();
+      if (q && !((e.name || "").toLowerCase().includes(q) || hexId.toLowerCase().includes(q))) continue;
+      const row = document.createElement("div");
+      row.className = "msg-row" + (state.selectedMessageKey === e.key ? " active" : "");
+      row.innerHTML = `
+        <span class="status-dot ${e.name ? "ok" : "unknown"}"></span>
+        <span class="body">
+          <div class="name">${escapeHtml(e.name || hexId)}</div>
+          <div class="sub"><span>${hexId}</span><span>·</span><span>Can ${e.channel}</span>${e.sender ? `<span>·</span><span>${escapeHtml(e.sender)}</span>` : ""}</div>
+        </span>
+        <span class="count">${e.count.toLocaleString("es-AR")}</span>
+        <span class="freqbar" style="width:${Math.max(4, (e.count / maxCount) * 100)}%"></span>`;
+      row.onclick = () => { state.selectedMessageKey = e.key; selectRow(e.lastRow, true); filterToMessage(e); renderMessageList(); };
+      wrap.appendChild(row);
+    }
+  }
+
+  function filterToMessage(e) {
+    el("traceSearch").value = e.name ? e.name : "0x" + e.id.toString(16);
+    applyFilter();
+  }
+
+  /* ---------- filtering ---------- */
+  function applyFilter() {
+    const q = (el("traceSearch").value || "").trim().toLowerCase();
+    const chanVal = el("chanFilter").value;
+    const chan = chanVal === "" ? null : parseInt(chanVal, 10);
+    const onlyDecoded = el("onlyDecoded").checked;
+
+    if (!q && chan === null && !onlyDecoded) {
+      state.filtered = null;
+    } else {
+      const out = [];
+      for (let i = 0; i < state.trace.length; i++) {
+        const r = state.trace[i];
+        if (chan !== null && r.channel !== chan) continue;
+        const dbc = dbcForChannel(r.channel);
+        const def = dbc ? dbc.messages.get(r.id) : null;
+        if (onlyDecoded && !def) continue;
+        if (q) {
+          const hexId = "0x" + r.id.toString(16);
+          let hit = hexId.includes(q) || String(r.id).includes(q) || String(r.channel) === q;
+          if (!hit && def) {
+            hit = def.name.toLowerCase().includes(q) || def.signals.some((s) => s.name.toLowerCase().includes(q));
+          }
+          if (!hit) continue;
+        }
+        out.push(i);
+      }
+      state.filtered = out;
+    }
+    updateResultCount();
+    rebuildVirtualList();
+  }
+
+  function updateResultCount() {
+    const total = state.trace.length;
+    const shown = state.filtered === null ? total : state.filtered.length;
+    el("resultCount").textContent = state.filtered === null ? "" : `${shown.toLocaleString("es-AR")} / ${total.toLocaleString("es-AR")}`;
+    el("emptyHint").style.display = total === 0 ? "flex" : "none";
+  }
+
+  /* ---------- virtualized trace table ---------- */
+  const viewport = el("traceViewport"), spacer = el("traceSpacer"), rowsEl = el("traceRows");
+  let rowPool = [];
+
+  function rowCount() { return state.filtered === null ? state.trace.length : state.filtered.length; }
+  function rowAt(pos) { return state.filtered === null ? pos : state.filtered[pos]; }
+
+  function rebuildVirtualList() {
+    spacer.style.height = rowCount() * ROW_H + "px";
+    renderVisibleRows();
+  }
+
+  function fmtTime(t) { return (t - state.t0).toFixed(4); }
+  function fmtData(data) {
+    let s = "";
+    for (let i = 0; i < data.length; i++) s += (i ? " " : "") + data[i].toString(16).toUpperCase().padStart(2, "0");
+    return s;
+  }
+
+  function renderVisibleRows() {
+    const total = rowCount();
+    const scrollTop = viewport.scrollTop;
+    const viewH = viewport.clientHeight || 400;
+    const first = Math.max(0, Math.floor(scrollTop / ROW_H) - 6);
+    const visibleN = Math.ceil(viewH / ROW_H) + 12;
+    const last = Math.min(total, first + visibleN);
+
+    while (rowPool.length < last - first) {
+      const d = document.createElement("div");
+      d.className = "trace-row";
+      d.innerHTML = `<div class="c-time mono"></div><div class="c-chan"></div><div class="c-dir mono"></div><div class="c-id mono"></div><div class="c-name"></div><div class="c-dlc mono"></div><div class="c-data mono"></div>`;
+      rowPool.push(d);
+    }
+    rowsEl.style.transform = `translateY(${first * ROW_H}px)`;
+    rowsEl.innerHTML = "";
+    for (let p = first; p < last; p++) {
+      const rowIdx = rowAt(p);
+      const r = state.trace[rowIdx];
+      const d = rowPool[p - first];
+      d.style.height = ROW_H + "px";
+      const dbc = dbcForChannel(r.channel);
+      const def = dbc ? dbc.messages.get(r.id) : null;
+      d.querySelector(".c-time").textContent = fmtTime(r.t);
+      d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
+      d.querySelector(".c-dir").textContent = r.dir;
+      d.querySelector(".c-id").textContent = "0x" + r.id.toString(16).toUpperCase().padStart(r.ext ? 8 : 3, "0");
+      const nameEl = d.querySelector(".c-name");
+      nameEl.textContent = def ? def.name : "—";
+      nameEl.className = "c-name" + (def ? "" : " unknown");
+      d.querySelector(".c-dlc").textContent = r.dlc;
+      d.querySelector(".c-data").textContent = fmtData(r.data);
+      d.className = "trace-row" + (rowIdx === state.selectedRow ? " selected" : "");
+      d.onclick = () => selectRow(rowIdx, false);
+      rowsEl.appendChild(d);
+    }
+  }
+  viewport.addEventListener("scroll", () => window.requestAnimationFrame(renderVisibleRows));
+  window.addEventListener("resize", () => renderVisibleRows());
+
+  function scrollRowIntoView(rowIdx) {
+    const pos = state.filtered === null ? rowIdx : state.filtered.indexOf(rowIdx);
+    if (pos < 0) return;
+    const top = pos * ROW_H, bottom = top + ROW_H;
+    if (top < viewport.scrollTop) viewport.scrollTop = top - 40;
+    else if (bottom > viewport.scrollTop + viewport.clientHeight) viewport.scrollTop = bottom - viewport.clientHeight + 40;
+  }
+
+  /* ---------- signal panel ---------- */
+  function selectRow(rowIdx, scroll) {
+    state.selectedRow = rowIdx;
+    if (scroll) scrollRowIntoView(rowIdx);
+    renderVisibleRows();
+    renderSignalPanelFor(rowIdx);
+  }
+
+  function renderSignalPanelFor(rowIdx) {
+    const panel = el("sigPanel");
+    if (rowIdx === null || rowIdx === undefined || !state.trace[rowIdx]) {
+      panel.innerHTML = '<div class="sig-empty">Elegí un mensaje de la traza para ver sus señales decodificadas.</div>';
+      return;
+    }
+    const r = state.trace[rowIdx];
+    const dbc = dbcForChannel(r.channel);
+    const hexId = "0x" + r.id.toString(16).toUpperCase();
+    const decoded = dbc ? decodeMessage(dbc, r.id, r.data) : null;
+
+    let html = "";
+    if (!decoded) {
+      html += `<div class="sig-header"><div class="msgname unknown">${hexId} — sin definir</div>
+        <div class="msgmeta"><span>Canal ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
+        <div class="comment">Este ID no está en el DBC asignado al canal ${r.channel}${dbc ? "" : " (no hay DBC asignado)"}.</div></div>`;
+    } else {
+      const msg = decoded.message;
+      const truncated = msg.dlc > r.data.length;
+      html += `<div class="sig-header">
+        <div class="msgname">${escapeHtml(msg.name)}</div>
+        <div class="msgmeta">
+          <span>${hexId}</span><span>Canal ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
+          ${msg.sender ? `<span>Emisor: ${escapeHtml(msg.sender)}</span>` : ""}
+        </div>
+        ${truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-paquete</span> <span class="comment" style="display:inline">DBC define ${msg.dlc} bytes; frame capturado trae ${r.data.length} — señales fuera de rango se omiten.</span></div>` : ""}
+        ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
+      </div>`;
+      if (msg.isMultiplexed) {
+        const muxSig = msg.signals.find((s) => s.isMultiplexor);
+        html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — mostrando el subconjunto de señales activo</div>`;
+      }
+      html += '<div class="raw-bytes">' + Array.from(r.data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
+      html += '<div class="sig-table">';
+      if (decoded.signals.length === 0) html += '<div class="sig-empty">Sin señales visibles en este frame.</div>';
+      for (const sg of decoded.signals) {
+        const hasLabel = sg.label !== null;
+        const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
+        html += `<div class="sig-row">
+          <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
+          <div class="sraw">crudo: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""}</div>
+          ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
+        </div>`;
+      }
+      html += "</div>";
+    }
+    panel.innerHTML = html;
+  }
+
+  function formatNum(v) {
+    if (Math.abs(v) >= 1e12) return v.toExponential(4);
+    const r = Math.round(v * 1000) / 1000;
+    return r.toLocaleString("es-AR", { maximumFractionDigits: 3 });
+  }
+
+  /* ---------- playback ---------- */
+  function currentPlayPos() {
+    if (state.selectedRow === null) return 0;
+    return state.filtered === null ? state.selectedRow : Math.max(0, state.filtered.indexOf(state.selectedRow));
+  }
+  function stepTo(pos) {
+    const total = rowCount();
+    if (total === 0) return;
+    pos = Math.max(0, Math.min(total - 1, pos));
+    selectRow(rowAt(pos), true);
+  }
+  function stopPlay() {
+    state.playing = false;
+    clearTimeout(state.playTimer);
+    el("playBtn").classList.remove("playing");
+    el("playIcon").innerHTML = '<path d="M8 5v14l11-7z"/>';
+  }
+  function startPlay() {
+    const total = rowCount();
+    if (total === 0) return;
+    state.playing = true;
+    el("playBtn").classList.add("playing");
+    el("playIcon").innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+    const speed = parseFloat(el("speedSel").value) || 5;
+    function tick() {
+      if (!state.playing) return;
+      let pos = currentPlayPos();
+      if (pos >= total - 1) { stopPlay(); return; }
+      const curT = state.trace[rowAt(pos)].t, nextT = state.trace[rowAt(pos + 1)].t;
+      const delayMs = Math.min(300, Math.max(4, ((nextT - curT) * 1000) / speed));
+      stepTo(pos + 1);
+      state.playTimer = setTimeout(tick, delayMs);
+    }
+    tick();
+  }
+
+  /* ---------- misc UI wiring ---------- */
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  function wireDrop(zoneId, inputId, onFiles) {
+    const zone = el(zoneId), input = el(inputId);
+    zone.addEventListener("click", (e) => { if (e.target !== input) input.click(); });
+    input.addEventListener("change", () => { if (input.files.length) onFiles(input.files); input.value = ""; });
+    ["dragenter", "dragover"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("drag"); }));
+    zone.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files); });
+  }
+
+  wireDrop("dbcDrop", "dbcInput", (files) => {
+    [...files].forEach((f) => {
+      const reader = new FileReader();
+      reader.onload = () => addDbcFile(f.name, reader.result);
+      reader.readAsText(f, "windows-1252");
+    });
+  });
+  wireDrop("logDrop", "logInput", (files) => loadLogFile(files[0]));
+
+  let searchDebounce;
+  el("traceSearch").addEventListener("input", () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(applyFilter, 150); });
+  el("chanFilter").addEventListener("change", applyFilter);
+  el("onlyDecoded").addEventListener("change", applyFilter);
+  el("msgSearch").addEventListener("input", renderMessageList);
+
+  el("playBtn").addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
+  el("stepFwdBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() + 1); });
+  el("stepBackBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() - 1); });
+
+  updateResultCount();
+})();
+</script>

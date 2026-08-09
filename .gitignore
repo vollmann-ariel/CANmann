@@ -1,0 +1,6 @@
+# Ignorar todo el contenido de esta carpeta...
+*
+
+# ...excepto el visor CAN que se está desarrollando en este repo.
+!can_viewer.html
+!.gitignore
