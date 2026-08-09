@@ -361,7 +361,7 @@
   .chart-axis-row { flex: 0 0 auto; height: 22px; position: relative; border-top: 1px solid var(--border); background: var(--surface); padding: 0 14px; }
   .chart-axis-row canvas { width: 100%; height: 100%; display: block; }
 
-  .chart-readout { padding: 14px; }
+  .chart-readout { padding: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .chart-readout .hint { color: var(--ink-faint); font-size: 12px; }
   .chart-readout .t { font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; }
   .chart-readout-row { display: flex; flex-direction: column; gap: 3px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
@@ -1545,7 +1545,6 @@
     ctx.clearRect(0, 0, w, h);
     if (!state.chart.range || w < 4) return;
     const { t0, t1 } = state.chart.range;
-    // mismos márgenes que drawLane() para que el crosshair quede perfectamente alineado entre carriles y eje
     const marginL = 4, marginR = 4, plotW = w - marginL - marginR;
     const xOf = (t) => marginL + ((t - t0) / (t1 - t0)) * plotW;
     const ticks = niceTicks(t0 - state.t0, t1 - state.t0, Math.max(2, Math.floor(plotW / 90)));
@@ -1558,13 +1557,6 @@
       ctx.fillText((Number.isInteger(tick) ? tick : tick.toFixed(2)) + "s", Math.min(w - 22, Math.max(22, x)), 16);
     }
     ctx.textAlign = "left";
-
-    if (state.chart.hoverT !== null && state.chart.hoverT >= t0 && state.chart.hoverT <= t1) {
-      const hx = Math.round(xOf(state.chart.hoverT)) + 0.5;
-      ctx.strokeStyle = inkFaint; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx, h); ctx.stroke();
-      ctx.setLineDash([]);
-    }
   }
 
   function updateReadout() {
