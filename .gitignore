@@ -4,3 +4,4 @@
 # ...excepto el visor CAN que se está desarrollando en este repo.
 !can_viewer.html
 !.gitignore
+!README.md
