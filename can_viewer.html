@@ -1633,17 +1633,33 @@
 
   function wireChartInteraction() {
     const stack = el("chartStack");
+    const scrollEl = el("chartScroll");
+    const DRAG_LOCK_PX = 4; // distancia mínima antes de decidir si el arrastre es horizontal (pan) o vertical (scroll)
+
     stack.addEventListener("pointermove", (e) => {
       if (state.chart.tableView) return;
-      const rect = chartRefRect();
-      if (!rect) return;
-      if (state.chart.drag) {
-        const dx = e.clientX - state.chart.drag.startClientX;
-        const dt = -(dx / rect.width) * (state.chart.drag.startRange.t1 - state.chart.drag.startRange.t0);
-        setRangeClamped(state.chart.drag.startRange.t0 + dt, state.chart.drag.startRange.t1 + dt);
+      const drag = state.chart.drag;
+      if (drag) {
+        const dx = e.clientX - drag.startClientX;
+        const dy = e.clientY - drag.startClientY;
+        if (!drag.mode) {
+          if (Math.abs(dx) < DRAG_LOCK_PX && Math.abs(dy) < DRAG_LOCK_PX) return;
+          drag.mode = Math.abs(dx) >= Math.abs(dy) ? "pan-x" : "scroll-y";
+          if (drag.mode === "scroll-y") stack.style.cursor = "grabbing";
+        }
+        if (drag.mode === "scroll-y") {
+          scrollEl.scrollTop = drag.startScrollTop - dy;
+          return;
+        }
+        const rect = chartRefRect();
+        if (!rect) return;
+        const dt = -(dx / rect.width) * (drag.startRange.t1 - drag.startRange.t0);
+        setRangeClamped(drag.startRange.t0 + dt, drag.startRange.t1 + dt);
         requestRedraw();
         return;
       }
+      const rect = chartRefRect();
+      if (!rect) return;
       const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
       state.chart.hoverT = xToT(x, rect.width);
       requestRedraw();
@@ -1655,12 +1671,20 @@
     });
     stack.addEventListener("pointerdown", (e) => {
       if (state.chart.tableView || !state.chart.range) return;
-      if (e.target.closest("button")) return; // dejar que el botón (✕ quitar) reciba su propio click, sin iniciar un pan
+      if (e.target.closest("button")) return; // dejar que el botón (✕ quitar) reciba su propio click, sin iniciar un arrastre
       stack.setPointerCapture(e.pointerId);
-      state.chart.drag = { startClientX: e.clientX, startRange: { ...state.chart.range } };
+      state.chart.drag = {
+        startClientX: e.clientX, startClientY: e.clientY,
+        startRange: { ...state.chart.range }, startScrollTop: scrollEl.scrollTop,
+        mode: null, // se decide en el primer pointermove: "pan-x" (horizontal) o "scroll-y" (vertical)
+      };
     });
     stack.addEventListener("pointerup", (e) => {
-      if (state.chart.drag) { try { stack.releasePointerCapture(e.pointerId); } catch (err) {} state.chart.drag = null; }
+      if (state.chart.drag) {
+        try { stack.releasePointerCapture(e.pointerId); } catch (err) {}
+        state.chart.drag = null;
+        stack.style.cursor = "";
+      }
     });
     stack.addEventListener("wheel", (e) => {
       if (state.chart.tableView || !state.chart.range) return;
