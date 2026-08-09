@@ -375,6 +375,10 @@
     font-size: 10px; color: var(--ink-faint); padding-left: 17px; font-variant-numeric: tabular-nums;
     font-family: "Cascadia Code", Consolas, monospace;
   }
+  .chart-readout-row { cursor: pointer; border-radius: 6px; }
+  .chart-readout-row:hover { background: var(--surface-2); }
+  .chart-lane.flash { animation: flashLane 900ms ease-out; }
+  @keyframes flashLane { 0% { background: var(--accent-soft-2); } 100% { background: transparent; } }
 </style>
 
 <div class="app">
@@ -1580,6 +1584,8 @@
       const vp = valueAtTime(s.points, t);
       const row = document.createElement("div");
       row.className = "chart-readout-row";
+      row.title = "Ir a esta gráfica";
+      row.onclick = () => scrollToLane(key);
       const top = document.createElement("div"); top.className = "top";
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
       const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
@@ -1607,6 +1613,17 @@
       panel.appendChild(row);
       if (s.el && s.el.lval) s.el.lval.textContent = compact;
     }
+  }
+
+  function scrollToLane(key) {
+    const s = state.chart.series.get(key);
+    if (!s || !s.el || !s.el.lane) return;
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    s.el.lane.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+    s.el.lane.classList.remove("flash");
+    void s.el.lane.offsetWidth; // fuerza reflow para poder re-disparar la animación si ya se hizo flash antes
+    s.el.lane.classList.add("flash");
+    setTimeout(() => { if (s.el && s.el.lane) s.el.lane.classList.remove("flash"); }, 950);
   }
 
   /* ---- interacción: cursor, zoom (wheel), pan (drag) ---- */
