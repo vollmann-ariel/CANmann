@@ -18,6 +18,14 @@
     --ok: #2f8a52;
     --warn: #a67818;
     --critical: #b8443c;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
     --shadow: 0 1px 2px rgba(20, 22, 20, 0.06), 0 4px 16px rgba(20, 22, 20, 0.05);
     color-scheme: light;
   }
@@ -39,6 +47,14 @@
       --ok: #55a56f;
       --warn: #d9b23d;
       --critical: #d97369;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --series-7: #9085e9;
+      --series-8: #e66767;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
       color-scheme: dark;
     }
@@ -48,6 +64,8 @@
     --ink: #e7e5df; --ink-dim: #9aa1ab; --ink-faint: #626a74;
     --accent: #d98c3d; --accent-ink: #1b1300; --accent-soft: rgba(217,140,61,.14); --accent-soft-2: rgba(217,140,61,.26);
     --cyan: #5fb8c4; --ok: #55a56f; --warn: #d9b23d; --critical: #d97369;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -55,6 +73,8 @@
     --ink: #1a1d1f; --ink-dim: #5b6266; --ink-faint: #8b9296;
     --accent: #b96a1f; --accent-ink: #ffffff; --accent-soft: rgba(185,106,31,.12); --accent-soft-2: rgba(185,106,31,.22);
     --cyan: #2f8794; --ok: #2f8a52; --warn: #a67818; --critical: #b8443c;
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+    --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
     --shadow: 0 1px 2px rgba(20,22,20,.06), 0 4px 16px rgba(20,22,20,.05); color-scheme: light;
   }
 
@@ -265,6 +285,88 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 6px; border: 2px solid var(--bg); }
   ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+
+  /* ---------- Tab switcher ---------- */
+  .tabbar { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .tab-btn {
+    border: none; background: none; color: var(--ink-dim); font-size: 12px; font-weight: 700;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  }
+  .tab-btn:hover { color: var(--ink); }
+  .tab-btn.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+  .tab-hidden { display: none !important; }
+
+  /* ---------- Signal picker (message list, Gráficas tab) ---------- */
+  .msg-row.expandable { cursor: pointer; }
+  .sig-pick-list { padding: 0 4px 6px 26px; display: flex; flex-direction: column; gap: 1px; }
+  .sig-pick-row {
+    display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; font-size: 11px;
+  }
+  .sig-pick-row:hover { background: var(--surface-2); }
+  .sig-pick-row .spname { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
+  .sig-pick-row .spunit { color: var(--ink-faint); font-size: 9.5px; }
+  .sig-pick-row button {
+    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--ink-dim); cursor: pointer; font-size: 12px; line-height: 1;
+  }
+  .sig-pick-row button:hover { border-color: var(--accent); color: var(--accent); }
+  .sig-pick-row.added .spname { color: var(--ink); font-weight: 600; }
+  .sig-pick-row.added button { background: var(--critical); border-color: var(--critical); color: #fff; }
+  .sig-pick-row .swatch { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+
+  /* ---------- Chart view ---------- */
+  .chart-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
+  .chart-toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex: 0 0 auto; flex-wrap: wrap;
+  }
+  .chart-toolbar select { padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
+  .chart-add-box { position: relative; flex: 1 1 220px; max-width: 360px; }
+  .chart-add-box input {
+    width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+  }
+  .chart-add-results {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; z-index: 20; display: none;
+  }
+  .chart-add-results.open { display: block; }
+  .chart-add-results .opt { padding: 7px 10px; cursor: pointer; font-size: 11.5px; display: flex; justify-content: space-between; gap: 8px; }
+  .chart-add-results .opt:hover { background: var(--surface-2); }
+  .chart-add-results .opt .n { font-weight: 600; }
+  .chart-add-results .opt .m { color: var(--ink-faint); font-size: 10px; }
+
+  .chart-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; position: relative; }
+  .chart-stack { display: flex; flex-direction: column; touch-action: none; }
+  .chart-empty { padding: 60px 30px; text-align: center; color: var(--ink-faint); font-size: 13px; }
+
+  .chart-lane { border-bottom: 1px solid var(--border); padding: 8px 14px 10px; position: relative; }
+  .chart-lane-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .chart-lane-head .swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+  .chart-lane-head .lname { font-weight: 700; font-size: 12px; }
+  .chart-lane-head .lmeta { font-size: 10px; color: var(--ink-faint); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chart-lane-head .lval { font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .chart-lane-head .lval .u { color: var(--ink-faint); font-weight: 600; font-size: 10px; margin-left: 3px; }
+  .chart-lane-head button {
+    flex: 0 0 auto; background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 13px;
+  }
+  .chart-lane-head button:hover { color: var(--critical); background: var(--surface-2); }
+  .chart-lane canvas { display: block; width: 100%; height: 92px; cursor: crosshair; }
+  .chart-lane-table { max-height: 260px; overflow-y: auto; }
+  .chart-lane-table table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .chart-lane-table th { position: sticky; top: 0; background: var(--surface); text-align: left; padding: 4px 8px; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; font-size: 9.5px; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+  .chart-lane-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+
+  .chart-axis-row { flex: 0 0 auto; height: 22px; position: relative; border-top: 1px solid var(--border); background: var(--surface); }
+  .chart-axis-row canvas { width: 100%; height: 100%; display: block; }
+
+  .chart-readout { padding: 14px; }
+  .chart-readout .hint { color: var(--ink-faint); font-size: 12px; }
+  .chart-readout .t { font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; }
+  .chart-readout-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .chart-readout-row .swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+  .chart-readout-row .rname { flex: 1 1 auto; font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chart-readout-row .rval { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .chart-readout-row .rval .u { color: var(--ink-faint); font-weight: 600; font-size: 10px; margin-left: 2px; }
 </style>
 
 <div class="app">
@@ -276,10 +378,14 @@
         <div class="tagline">Visor de trazas CAN · decodificación DBC</div>
       </div>
     </div>
+    <nav class="tabbar">
+      <button type="button" class="tab-btn active" id="tabTrazaBtn">Traza</button>
+      <button type="button" class="tab-btn" id="tabGraficasBtn">Gráficas</button>
+    </nav>
     <div class="stats-strip" id="statsStrip"></div>
   </header>
 
-  <div class="workspace">
+  <div class="workspace" id="workspace">
     <aside class="rail rail-left">
       <section class="block">
         <h2>1 · Archivos DBC</h2>
@@ -313,7 +419,7 @@
       </section>
     </aside>
 
-    <main class="trace-pane">
+    <main class="trace-pane tab-traza">
       <div class="toolbar">
         <div class="search-box">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -357,9 +463,37 @@
       </div>
     </main>
 
-    <aside class="rail rail-right">
+    <aside class="rail rail-right tab-traza">
       <div class="sig-panel" id="sigPanel">
         <div class="sig-empty">Elegí un mensaje de la traza para ver sus señales decodificadas.</div>
+      </div>
+    </aside>
+
+    <main class="chart-pane tab-graficas tab-hidden" id="chartPane">
+      <div class="chart-toolbar">
+        <div class="chart-add-box">
+          <input id="chartAddInput" placeholder="Agregar señal: nombre, mensaje o ID…" autocomplete="off" />
+          <div class="chart-add-results" id="chartAddResults"></div>
+        </div>
+        <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Restablecer zoom">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
+        </button>
+        <label class="toggle"><input type="checkbox" id="chartTableToggle" /> Ver como tabla</label>
+        <span class="result-count" id="chartHint">Agregá señales desde la lista de la izquierda (✛) o con el buscador.</span>
+      </div>
+      <div class="chart-scroll" id="chartScroll">
+        <div class="chart-stack" id="chartStack">
+          <div class="chart-empty" id="chartEmptyHint">Todavía no agregaste ninguna señal. Elegí un mensaje decodificado a la izquierda y sumá alguna de sus señales con el botón ✛.</div>
+        </div>
+      </div>
+      <div class="chart-axis-row" id="chartAxisRow" style="display:none">
+        <canvas id="chartAxisCanvas"></canvas>
+      </div>
+    </main>
+
+    <aside class="rail rail-right tab-graficas tab-hidden" id="chartReadoutRail">
+      <div class="chart-readout" id="chartReadout">
+        <div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>
       </div>
     </aside>
   </div>
@@ -564,6 +698,18 @@
     selectedMessageKey: null,
     playing: false,
     playTimer: null,
+    tab: "traza",
+    chart: {
+      series: new Map(),   // key "chan:id:signal" -> {channel,id,signalName,msgName,unit,comment,colorVar,points:[{t,raw,value,label}]}
+      order: [],           // keys, insertion order = lane order
+      colorSeq: 0,          // monotonic counter for color-slot assignment (never reused on remove)
+      expanded: new Set(), // msgIndex keys expanded in the "Gráficas" message list
+      fullRange: null,     // {t0,t1} full extent of the loaded trace
+      range: null,         // {t0,t1} currently visible window
+      hoverT: null,
+      tableView: false,
+      drag: null,          // {startClientX, startRange}
+    },
   };
 
   const ROW_H = 25;
@@ -682,6 +828,8 @@
       rebuildChannelMap();
       renderChannelMapBlock();
       populateChannelFilter();
+      resetChartSeries();
+      renderChartStack();
       recomputeAll();
     };
     reader.readAsText(file, "windows-1252");
@@ -743,12 +891,14 @@
     const q = (el("msgSearch").value || "").toLowerCase();
     const entries = [...state.msgIndex.values()].sort((a, b) => b.count - a.count);
     const maxCount = entries.length ? entries[0].count : 1;
+    const inCharts = state.tab === "graficas";
     wrap.innerHTML = "";
     for (const e of entries) {
       const hexId = "0x" + e.id.toString(16).toUpperCase();
       if (q && !((e.name || "").toLowerCase().includes(q) || hexId.toLowerCase().includes(q))) continue;
+      if (inCharts && !e.name) continue; // sin definición DBC no hay señales para graficar
       const row = document.createElement("div");
-      row.className = "msg-row" + (state.selectedMessageKey === e.key ? " active" : "");
+      row.className = "msg-row" + (!inCharts && state.selectedMessageKey === e.key ? " active" : "") + (inCharts ? " expandable" : "");
       row.innerHTML = `
         <span class="status-dot ${e.name ? "ok" : "unknown"}"></span>
         <span class="body">
@@ -757,9 +907,46 @@
         </span>
         <span class="count">${e.count.toLocaleString("es-AR")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.count / maxCount) * 100)}%"></span>`;
-      row.onclick = () => { state.selectedMessageKey = e.key; selectRow(e.lastRow, true); filterToMessage(e); renderMessageList(); };
+      if (inCharts) {
+        row.onclick = () => { toggleMsgExpand(e.key); };
+      } else {
+        row.onclick = () => { state.selectedMessageKey = e.key; selectRow(e.lastRow, true); filterToMessage(e); renderMessageList(); };
+      }
       wrap.appendChild(row);
+      if (inCharts && state.chart.expanded.has(e.key)) wrap.appendChild(buildSignalPickList(e));
     }
+  }
+
+  function toggleMsgExpand(key) {
+    if (state.chart.expanded.has(key)) state.chart.expanded.delete(key);
+    else state.chart.expanded.add(key);
+    renderMessageList();
+  }
+
+  function buildSignalPickList(e) {
+    const list = document.createElement("div");
+    list.className = "sig-pick-list";
+    const dbc = dbcForChannel(e.channel);
+    const msg = dbc && dbc.messages.get(e.id);
+    if (!msg || msg.signals.length === 0) {
+      list.innerHTML = '<div class="sig-pick-row"><span class="spname">Sin señales definidas</span></div>';
+      return list;
+    }
+    for (const sig of msg.signals) {
+      const key = e.channel + ":" + e.id + ":" + sig.name;
+      const added = state.chart.series.has(key);
+      const row = document.createElement("div");
+      row.className = "sig-pick-row" + (added ? " added" : "");
+      const swatch = added ? `<span class="swatch" style="background:var(${state.chart.series.get(key).colorVar})"></span>` : "";
+      row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span><button type="button" title="${added ? "Quitar de la gráfica" : "Agregar a la gráfica"}">${added ? "✕" : "✛"}</button>`;
+      row.querySelector("button").onclick = (ev) => {
+        ev.stopPropagation();
+        if (added) removeSignalFromChart(key);
+        else addSignalToChart(e.channel, e.id, sig.name);
+      };
+      list.appendChild(row);
+    }
+    return list;
   }
 
   function filterToMessage(e) {
@@ -809,6 +996,7 @@
 
   /* ---------- virtualized trace table ---------- */
   const viewport = el("traceViewport"), spacer = el("traceSpacer"), rowsEl = el("traceRows");
+  const chartEmptyHintEl = el("chartEmptyHint");
   let rowPool = [];
 
   function rowCount() { return state.filtered === null ? state.trace.length : state.filtered.length; }
@@ -973,6 +1161,444 @@
     tick();
   }
 
+  /* =========================================================
+   * Pestaña "Gráficas" — señales apiladas en ejes de tiempo sincronizados
+   * ========================================================= */
+  function buildSeries(channel, id, signalName) {
+    const dbc = dbcForChannel(channel);
+    const msg = dbc && dbc.messages.get(id);
+    const sigDef = msg && msg.signals.find((s) => s.name === signalName);
+    const points = [];
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      if (r.channel !== channel || r.id !== id) continue;
+      const decoded = decodeMessage(dbc, id, r.data);
+      if (!decoded) continue;
+      const sig = decoded.signals.find((s) => s.name === signalName);
+      if (!sig) continue; // rama de mux inactiva o señal fuera de rango en este frame — hueco en la serie
+      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
+    }
+    return {
+      channel, id, signalName, msgName: msg ? msg.name : "0x" + id.toString(16),
+      unit: sigDef ? sigDef.unit : "", comment: sigDef ? sigDef.comment : null, points, el: null,
+    };
+  }
+
+  function ensureFullRange() {
+    if (state.trace.length === 0) { state.chart.fullRange = null; state.chart.range = null; return; }
+    const t0 = state.trace[0].t, t1 = state.trace[state.trace.length - 1].t;
+    const span = Math.max(t1 - t0, 0.001);
+    state.chart.fullRange = { t0: t0 - span * 0.01, t1: t1 + span * 0.01 };
+    if (!state.chart.range) state.chart.range = { ...state.chart.fullRange };
+  }
+
+  function addSignalToChart(channel, id, signalName) {
+    const key = channel + ":" + id + ":" + signalName;
+    if (state.chart.series.has(key)) return;
+    const series = buildSeries(channel, id, signalName);
+    series.colorVar = "--series-" + ((state.chart.colorSeq++ % 8) + 1);
+    state.chart.series.set(key, series);
+    state.chart.order.push(key);
+    ensureFullRange();
+    renderMessageList();
+    renderChartStack();
+  }
+
+  function removeSignalFromChart(key) {
+    state.chart.series.delete(key);
+    state.chart.order = state.chart.order.filter((k) => k !== key);
+    renderMessageList();
+    renderChartStack();
+  }
+
+  function resetChartSeries() {
+    state.chart.series.clear();
+    state.chart.order = [];
+    state.chart.expanded.clear();
+    state.chart.range = null;
+    state.chart.hoverT = null;
+  }
+
+  /* ---- escalas ---- */
+  function tToX(t, width) { const { t0, t1 } = state.chart.range; return ((t - t0) / (t1 - t0)) * width; }
+  function xToT(x, width) { const { t0, t1 } = state.chart.range; return t0 + (x / width) * (t1 - t0); }
+
+  function niceStep(range, targetTicks) {
+    if (!(range > 0)) return 1;
+    const rough = range / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const norm = rough / mag;
+    const step = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+    return step * mag;
+  }
+  function niceTicks(min, max, targetTicks) {
+    if (min === max) { min -= 1; max += 1; }
+    const step = niceStep(max - min, targetTicks);
+    const niceMin = Math.floor(min / step) * step, niceMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let v = niceMin; v <= niceMax + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
+    return ticks;
+  }
+
+  function lowerBound(pts, t) {
+    let lo = 0, hi = pts.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (pts[mid].t < t) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
+  function upperBoundIdx(pts, t) {
+    let lo = 0, hi = pts.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (pts[mid].t <= t) lo = mid + 1; else hi = mid; }
+    return lo - 1;
+  }
+  function valueAtTime(points, t) {
+    if (points.length === 0 || t < points[0].t) return null;
+    let lo = 0, hi = points.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (points[mid].t <= t) lo = mid; else hi = mid - 1; }
+    return points[lo];
+  }
+
+  /* ---- DOM de los carriles ---- */
+  function renderChartStack() {
+    const stack = el("chartStack");
+    if (state.chart.order.length === 0) {
+      stack.innerHTML = "";
+      stack.appendChild(chartEmptyHintEl);
+      el("chartAxisRow").style.display = "none";
+      updateReadout();
+      return;
+    }
+    el("chartAxisRow").style.display = "";
+    stack.innerHTML = "";
+    for (const key of state.chart.order) {
+      const s = state.chart.series.get(key);
+      const lane = document.createElement("div");
+      lane.className = "chart-lane";
+      lane.innerHTML = `
+        <div class="chart-lane-head">
+          <span class="swatch" style="background:var(${s.colorVar})"></span>
+          <span class="lname">${escapeHtml(s.signalName)}</span>
+          <span class="lmeta">${escapeHtml(s.msgName)}${s.comment ? " — " + escapeHtml(s.comment) : ""}</span>
+          <span class="lval"></span>
+          <button type="button" title="Quitar">✕</button>
+        </div>
+        <div class="chart-lane-body"></div>`;
+      lane.querySelector("button").onclick = () => removeSignalFromChart(key);
+      s.el = { lane, lval: lane.querySelector(".lval"), body: lane.querySelector(".chart-lane-body"), canvas: null, ctx: null };
+      stack.appendChild(lane);
+    }
+    buildLaneVisuals();
+  }
+
+  function buildLaneVisuals() {
+    for (const key of state.chart.order) {
+      const s = state.chart.series.get(key);
+      s.el.body.innerHTML = "";
+      if (state.chart.tableView) {
+        s.el.canvas = null; s.el.ctx = null;
+        s.el.body.appendChild(buildLaneTable(s));
+      } else {
+        const canvas = document.createElement("canvas");
+        s.el.body.appendChild(canvas);
+        s.el.canvas = canvas;
+        s.el.ctx = canvas.getContext("2d");
+      }
+    }
+    requestRedraw();
+  }
+
+  function buildLaneTable(s) {
+    const wrap = document.createElement("div");
+    wrap.className = "chart-lane-table";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    thead.innerHTML = "<tr><th>Tiempo (s)</th><th>Valor</th></tr>";
+    const tbody = document.createElement("tbody");
+    for (const p of s.points) {
+      const tr = document.createElement("tr");
+      const tdT = document.createElement("td"); tdT.className = "mono"; tdT.textContent = (p.t - state.t0).toFixed(4);
+      const tdV = document.createElement("td");
+      tdV.textContent = p.label !== null ? p.label : formatNum(p.value) + (s.unit ? " " + s.unit : "");
+      tr.appendChild(tdT); tr.appendChild(tdV);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(thead); table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  /* ---- render de canvas ---- */
+  function resizeCanvasForDPR(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    return { w: rect.width, h: rect.height, dpr };
+  }
+
+  let chartRafPending = false;
+  function requestRedraw() {
+    if (chartRafPending) return;
+    chartRafPending = true;
+    requestAnimationFrame(() => { chartRafPending = false; redrawChart(); });
+  }
+
+  function redrawChart() {
+    if (state.chart.order.length === 0 || !state.chart.range) { updateReadout(); return; }
+    const styles = getComputedStyle(document.documentElement);
+    const gridColor = styles.getPropertyValue("--border").trim();
+    const inkFaint = styles.getPropertyValue("--ink-faint").trim();
+    for (const key of state.chart.order) {
+      const s = state.chart.series.get(key);
+      if (!s.el || !s.el.canvas) continue;
+      drawLane(s, styles, gridColor, inkFaint);
+    }
+    drawAxis(gridColor, inkFaint);
+    updateReadout();
+  }
+
+  function drawLane(s, styles, gridColor, inkFaint) {
+    const { w, h, dpr } = resizeCanvasForDPR(s.el.canvas);
+    const ctx = s.el.ctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (w < 4 || h < 4) return;
+
+    const { t0, t1 } = state.chart.range;
+    const pts = s.points;
+    const marginL = 4, marginR = 4, marginT = 6, marginB = 4;
+    const plotW = w - marginL - marginR, plotH = h - marginT - marginB;
+
+    if (pts.length === 0) {
+      ctx.fillStyle = inkFaint; ctx.font = "11px 'Segoe UI', sans-serif";
+      ctx.fillText("Sin datos para esta señal", marginL, h / 2);
+      return;
+    }
+    let lo = Math.max(0, lowerBound(pts, t0) - 1);
+    let hi = Math.min(pts.length - 1, upperBoundIdx(pts, t1) + 1);
+
+    let ymin = Infinity, ymax = -Infinity;
+    for (let i = lo; i <= hi; i++) { const v = pts[i].value; if (v < ymin) ymin = v; if (v > ymax) ymax = v; }
+    if (!isFinite(ymin)) { ymin = 0; ymax = 1; }
+    if (ymin === ymax) { ymin -= 1; ymax += 1; }
+    const padY = (ymax - ymin) * 0.1;
+    ymin -= padY; ymax += padY;
+
+    const xOf = (t) => marginL + ((t - t0) / (t1 - t0)) * plotW;
+    const yOf = (v) => marginT + plotH - ((v - ymin) / (ymax - ymin)) * plotH;
+
+    const ticks = niceTicks(ymin, ymax, 3);
+    ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.font = "9.5px 'Cascadia Code', Consolas, monospace"; ctx.fillStyle = inkFaint;
+    for (const tick of ticks) {
+      if (tick < ymin || tick > ymax) continue;
+      const y = Math.round(yOf(tick)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(marginL, y); ctx.lineTo(w - marginR, y); ctx.stroke();
+      ctx.fillText(formatNum(tick), marginL + 3, Math.max(9, y - 2));
+    }
+
+    if (lo <= hi) {
+      const color = styles.getPropertyValue(s.colorVar).trim();
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.lineCap = "round";
+      ctx.beginPath();
+      let lastX = null, lastY = null;
+      for (let i = lo; i <= hi; i++) {
+        const x = xOf(pts[i].t), y = yOf(pts[i].value);
+        if (lastX === null) ctx.moveTo(x, y);
+        else { ctx.lineTo(x, lastY); ctx.lineTo(x, y); }
+        lastX = x; lastY = y;
+      }
+      if (lastX !== null && hi === pts.length - 1) ctx.lineTo(marginL + plotW, lastY);
+      ctx.stroke();
+    }
+
+    if (state.chart.hoverT !== null && state.chart.hoverT >= t0 && state.chart.hoverT <= t1) {
+      const hx = Math.round(xOf(state.chart.hoverT)) + 0.5;
+      ctx.strokeStyle = inkFaint; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(hx, marginT); ctx.lineTo(hx, h - marginB); ctx.stroke();
+      ctx.setLineDash([]);
+      const vp = valueAtTime(pts, state.chart.hoverT);
+      if (vp) {
+        const py = Math.round(yOf(vp.value)) + 0.5;
+        ctx.fillStyle = styles.getPropertyValue(s.colorVar).trim();
+        ctx.beginPath(); ctx.arc(hx, py, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = styles.getPropertyValue("--surface").trim(); ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+  }
+
+  function drawAxis(gridColor, inkFaint) {
+    const canvas = el("chartAxisCanvas");
+    const { w, h, dpr } = resizeCanvasForDPR(canvas);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (!state.chart.range || w < 4) return;
+    const { t0, t1 } = state.chart.range;
+    const ticks = niceTicks(t0 - state.t0, t1 - state.t0, Math.max(2, Math.floor(w / 90)));
+    ctx.strokeStyle = gridColor; ctx.fillStyle = inkFaint; ctx.font = "10px 'Cascadia Code', Consolas, monospace"; ctx.textAlign = "center";
+    for (const tick of ticks) {
+      const t = tick + state.t0;
+      if (t < t0 || t > t1) continue;
+      const x = ((t - t0) / (t1 - t0)) * w;
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, 4); ctx.stroke();
+      ctx.fillText((Number.isInteger(tick) ? tick : tick.toFixed(2)) + "s", Math.min(w - 22, Math.max(22, x)), 16);
+    }
+    ctx.textAlign = "left";
+  }
+
+  function updateReadout() {
+    const panel = el("chartReadout");
+    if (state.chart.order.length === 0) {
+      panel.innerHTML = '<div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>';
+      return;
+    }
+    const t = state.chart.hoverT !== null ? state.chart.hoverT : (state.chart.range ? state.chart.range.t1 : state.t0);
+    panel.innerHTML = "";
+    const tEl = document.createElement("div");
+    tEl.className = "t";
+    tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + (state.chart.hoverT === null ? " · último valor visible" : "");
+    panel.appendChild(tEl);
+    for (const key of state.chart.order) {
+      const s = state.chart.series.get(key);
+      const vp = valueAtTime(s.points, t);
+      const row = document.createElement("div");
+      row.className = "chart-readout-row";
+      const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
+      const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
+      const val = document.createElement("span"); val.className = "rval";
+      let compact = "—";
+      if (vp) {
+        if (vp.label !== null) { val.textContent = vp.label; compact = vp.label; }
+        else {
+          val.textContent = formatNum(vp.value);
+          compact = formatNum(vp.value);
+          if (s.unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = s.unit; val.appendChild(u); }
+        }
+      } else { val.textContent = "—"; }
+      row.appendChild(swatch); row.appendChild(name); row.appendChild(val);
+      panel.appendChild(row);
+      if (s.el && s.el.lval) s.el.lval.textContent = compact;
+    }
+  }
+
+  /* ---- interacción: cursor, zoom (wheel), pan (drag) ---- */
+  function chartRefRect() {
+    const firstKey = state.chart.order[0];
+    const s = firstKey && state.chart.series.get(firstKey);
+    if (!s || !s.el || !s.el.canvas) return null;
+    const rect = s.el.canvas.getBoundingClientRect();
+    return rect.width > 0 ? rect : null;
+  }
+
+  function setRangeClamped(t0, t1) {
+    const full = state.chart.fullRange;
+    if (!full) return;
+    const minSpan = (full.t1 - full.t0) / 5000;
+    if (t1 - t0 < minSpan) { const c = (t0 + t1) / 2; t0 = c - minSpan / 2; t1 = c + minSpan / 2; }
+    if (t1 - t0 > full.t1 - full.t0) { t0 = full.t0; t1 = full.t1; }
+    else {
+      if (t0 < full.t0) { t1 += full.t0 - t0; t0 = full.t0; }
+      if (t1 > full.t1) { t0 -= t1 - full.t1; t1 = full.t1; }
+    }
+    state.chart.range = { t0, t1 };
+  }
+
+  function wireChartInteraction() {
+    const stack = el("chartStack");
+    stack.addEventListener("pointermove", (e) => {
+      if (state.chart.tableView) return;
+      const rect = chartRefRect();
+      if (!rect) return;
+      if (state.chart.drag) {
+        const dx = e.clientX - state.chart.drag.startClientX;
+        const dt = -(dx / rect.width) * (state.chart.drag.startRange.t1 - state.chart.drag.startRange.t0);
+        setRangeClamped(state.chart.drag.startRange.t0 + dt, state.chart.drag.startRange.t1 + dt);
+        requestRedraw();
+        return;
+      }
+      const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
+      state.chart.hoverT = xToT(x, rect.width);
+      requestRedraw();
+    });
+    stack.addEventListener("pointerleave", () => {
+      if (state.chart.drag) return;
+      state.chart.hoverT = null;
+      requestRedraw();
+    });
+    stack.addEventListener("pointerdown", (e) => {
+      if (state.chart.tableView || !state.chart.range) return;
+      if (e.target.closest("button")) return; // dejar que el botón (✕ quitar) reciba su propio click, sin iniciar un pan
+      stack.setPointerCapture(e.pointerId);
+      state.chart.drag = { startClientX: e.clientX, startRange: { ...state.chart.range } };
+    });
+    stack.addEventListener("pointerup", (e) => {
+      if (state.chart.drag) { try { stack.releasePointerCapture(e.pointerId); } catch (err) {} state.chart.drag = null; }
+    });
+    stack.addEventListener("wheel", (e) => {
+      if (state.chart.tableView || !state.chart.range) return;
+      const rect = chartRefRect();
+      if (!rect) return;
+      e.preventDefault();
+      const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
+      const anchorT = xToT(x, rect.width);
+      const factor = Math.exp((e.deltaY > 0 ? 1 : -1) * 0.15);
+      const { t0, t1 } = state.chart.range;
+      setRangeClamped(anchorT - (anchorT - t0) * factor, anchorT + (t1 - anchorT) * factor);
+      requestRedraw();
+    }, { passive: false });
+  }
+
+  /* ---- buscador para agregar señales ---- */
+  function chartCandidates() {
+    const out = [];
+    for (const e of state.msgIndex.values()) {
+      if (!e.name) continue;
+      const dbc = dbcForChannel(e.channel);
+      const msg = dbc && dbc.messages.get(e.id);
+      if (!msg) continue;
+      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit });
+    }
+    return out;
+  }
+
+  function renderChartAddResults() {
+    const input = el("chartAddInput"), box = el("chartAddResults");
+    const q = input.value.trim().toLowerCase();
+    if (!q) { box.classList.remove("open"); box.innerHTML = ""; return; }
+    const matches = chartCandidates()
+      .filter((c) => c.signalName.toLowerCase().includes(q) || c.msgName.toLowerCase().includes(q))
+      .slice(0, 40);
+    box.innerHTML = "";
+    if (matches.length === 0) {
+      const d = document.createElement("div"); d.className = "opt";
+      const m = document.createElement("span"); m.className = "m"; m.textContent = "Sin resultados";
+      d.appendChild(m); box.appendChild(d);
+    } else {
+      for (const c of matches) {
+        const key = c.channel + ":" + c.id + ":" + c.signalName;
+        const opt = document.createElement("div"); opt.className = "opt";
+        const n = document.createElement("span"); n.className = "n"; n.textContent = c.signalName;
+        const m = document.createElement("span"); m.className = "m";
+        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (state.chart.series.has(key) ? " · ya agregada" : "");
+        opt.appendChild(n); opt.appendChild(m);
+        opt.onclick = () => { addSignalToChart(c.channel, c.id, c.signalName); input.value = ""; box.classList.remove("open"); box.innerHTML = ""; };
+        box.appendChild(opt);
+      }
+    }
+    box.classList.add("open");
+  }
+
+  /* ---- pestañas ---- */
+  function setTab(tab) {
+    if (state.tab === tab) return;
+    state.tab = tab;
+    el("tabTrazaBtn").classList.toggle("active", tab === "traza");
+    el("tabGraficasBtn").classList.toggle("active", tab === "graficas");
+    document.querySelectorAll(".tab-traza").forEach((n) => n.classList.toggle("tab-hidden", tab !== "traza"));
+    document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
+    renderMessageList();
+    if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) requestRedraw(); }
+  }
+
   /* ---------- misc UI wiring ---------- */
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -1003,6 +1629,21 @@
   el("playBtn").addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
   el("stepFwdBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() + 1); });
   el("stepBackBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() - 1); });
+
+  el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
+  el("tabGraficasBtn").addEventListener("click", () => setTab("graficas"));
+  el("chartResetZoomBtn").addEventListener("click", () => {
+    if (state.chart.fullRange) { state.chart.range = { ...state.chart.fullRange }; requestRedraw(); }
+  });
+  el("chartTableToggle").addEventListener("change", () => {
+    state.chart.tableView = el("chartTableToggle").checked;
+    buildLaneVisuals();
+  });
+  el("chartAddInput").addEventListener("input", renderChartAddResults);
+  el("chartAddInput").addEventListener("focus", renderChartAddResults);
+  document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
+  window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
+  wireChartInteraction();
 
   updateResultCount();
 })();
