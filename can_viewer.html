@@ -612,6 +612,13 @@
     return byteIndex * 8 + (7 - bitInByte);
   }
   function signalFitsData(sig, data) { return signalMaxBit(sig) < data.length * 8; }
+  function formatBitSpec(sig) {
+    const hi = signalMaxBit(sig);
+    const lo = hi - sig.length + 1;
+    const order = sig.byteOrder === "intel" ? "Intel" : "Motorola";
+    const sign = sig.signed ? "con signo" : "sin signo";
+    return `bits ${lo}-${hi} (${sig.length} bit${sig.length === 1 ? "" : "s"}, ${order}, ${sign})`;
+  }
 
   function rawSignalValue(data, sig) {
     let value = 0n;
@@ -648,7 +655,12 @@
       if (sig.muxValue !== null && sig.muxValue !== muxVal) continue;
       if (!signalFitsData(sig, data)) continue;
       const { raw, value } = decodeSignal(data, sig);
-      results.push({ name: sig.name, raw, value, unit: sig.unit, label: sig.valueTable && sig.valueTable.has(raw) ? sig.valueTable.get(raw) : null, comment: sig.comment, isMultiplexor: sig.isMultiplexor });
+      results.push({
+        name: sig.name, raw, value, unit: sig.unit,
+        label: sig.valueTable && sig.valueTable.has(raw) ? sig.valueTable.get(raw) : null,
+        comment: sig.comment, isMultiplexor: sig.isMultiplexor,
+        startBit: sig.startBit, length: sig.length, byteOrder: sig.byteOrder, signed: sig.signed,
+      });
     }
     return { message: msg, signals: results, muxVal };
   }
@@ -1209,7 +1221,7 @@
         const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
         html += `<div class="sig-row">
           <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
-          <div class="sraw">crudo: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""}</div>
+          <div class="sraw">crudo: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
           ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
         </div>`;
       }
