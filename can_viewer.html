@@ -170,12 +170,7 @@
   .file-pill button { background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
   .file-pill button:hover { color: var(--critical); background: var(--surface-3); }
 
-  .chan-map-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11.5px; }
-  .chan-map-row .chan-badge {
-    font-family: inherit; font-weight: 700; background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 5px; padding: 2px 7px; min-width: 20px; text-align: center;
-  }
-  .chan-map-row select { flex: 1 1 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px; }
+  #chanMap select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; }
 
   /* ---------- Message list ---------- */
   .msg-search {
@@ -426,7 +421,7 @@
       </section>
 
       <section class="block" id="chanMapBlock" data-block="chanmap" style="display:none">
-        <h2><span>3 · Canal → DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>3 · DBC preferido</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <div id="chanMap"></div>
         </div>
@@ -455,7 +450,6 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           <input id="traceSearch" placeholder="Filtrar traza: ID, nombre, canal…" />
         </div>
-        <select id="chanFilter"><option value="">Todos los canales</option></select>
         <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Solo decodificados</label>
         <span class="result-count" id="resultCount"></span>
         <div class="playbar">
@@ -730,9 +724,8 @@
    * ========================================================= */
   const state = {
     dbcs: [],            // { fileName, dbc, msgCount, sigCount }
-    channelDbcIdx: new Map(),
+    preferredDbcIdx: null, // índice en state.dbcs a probar primero cuando un ID está definido en más de un DBC cargado
     trace: [],
-    channels: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     filtered: null,       // array of row indices, or null = all
     t0: 0,                 // trace start time, for display as relative seconds
@@ -790,10 +783,18 @@
       const pill = document.createElement("div");
       pill.className = "file-pill";
       pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${d.msgCount} msg</span><button title="Quitar">✕</button>`;
-      pill.querySelector("button").onclick = () => { state.dbcs.splice(i, 1); renderDbcList(); rebuildChannelMap(); recomputeAll(); };
+      pill.querySelector("button").onclick = () => {
+        state.dbcs.splice(i, 1);
+        if (state.preferredDbcIdx !== null) {
+          if (state.preferredDbcIdx === i) state.preferredDbcIdx = null;
+          else if (state.preferredDbcIdx > i) state.preferredDbcIdx -= 1;
+        }
+        renderDbcList();
+        recomputeAll();
+      };
       list.appendChild(pill);
     });
-    renderChannelMapBlock();
+    renderPreferredDbcBlock();
   }
 
   function addDbcFile(fileName, text) {
@@ -803,48 +804,35 @@
     dbc.messages.forEach((m) => (sigCount += m.signals.length));
     state.dbcs.push({ fileName, dbc, msgCount: dbc.messages.size, sigCount });
     renderDbcList();
-    rebuildChannelMap();
     recomputeAll();
   }
 
-  function rebuildChannelMap() {
-    // auto-assign: try filename "CANn" -> channel n; else 1 dbc -> all channels
-    state.channelDbcIdx.clear();
-    if (state.dbcs.length === 0) return;
-    const byNum = new Map();
-    state.dbcs.forEach((d, i) => {
-      const m = d.fileName.match(/can\s*0*([1-9]\d*)/i);
-      if (m) byNum.set(parseInt(m[1], 10), i);
-    });
-    for (const ch of state.channels) {
-      if (byNum.has(ch)) state.channelDbcIdx.set(ch, byNum.get(ch));
-      else if (state.dbcs.length === 1) state.channelDbcIdx.set(ch, 0);
-      else if (byNum.has(0) === false && state.channelDbcIdx.has(ch) === false) state.channelDbcIdx.set(ch, byNum.size ? (byNum.get(ch) ?? 0) : 0);
-    }
-  }
-
-  function renderChannelMapBlock() {
+  function renderPreferredDbcBlock() {
     const block = el("chanMapBlock"), wrap = el("chanMap");
-    if (state.channels.length === 0 || state.dbcs.length === 0) { block.style.display = "none"; return; }
+    if (state.dbcs.length === 0) { block.style.display = "none"; return; }
     block.style.display = "";
     wrap.innerHTML = "";
-    state.channels.forEach((ch) => {
-      const row = document.createElement("div");
-      row.className = "chan-map-row";
-      const sel = document.createElement("select");
-      sel.innerHTML = '<option value="-1">— sin decodificar —</option>' + state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
-      sel.value = state.channelDbcIdx.has(ch) ? state.channelDbcIdx.get(ch) : -1;
-      sel.onchange = () => { if (sel.value === "-1") state.channelDbcIdx.delete(ch); else state.channelDbcIdx.set(ch, parseInt(sel.value, 10)); recomputeAll(); };
-      row.innerHTML = `<span class="chan-badge">${ch}</span>`;
-      row.appendChild(sel);
-      wrap.appendChild(row);
-    });
+    const sel = document.createElement("select");
+    sel.innerHTML = '<option value="-1">Sin preferencia (usa el primero que lo reconozca)</option>' +
+      state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
+    sel.value = state.preferredDbcIdx !== null ? state.preferredDbcIdx : -1;
+    sel.onchange = () => { state.preferredDbcIdx = sel.value === "-1" ? null : parseInt(sel.value, 10); recomputeAll(); };
+    wrap.appendChild(sel);
+    const hint = document.createElement("div");
+    hint.style.cssText = "margin-top:6px;font-size:10.5px;color:var(--ink-faint)";
+    hint.textContent = "Se prueba primero cuando el mismo ID está definido en más de un DBC cargado. Si no lo reconoce, se prueban los demás DBC cargados en orden.";
+    wrap.appendChild(hint);
   }
 
-  function dbcForChannel(ch) {
-    const idx = state.channelDbcIdx.get(ch);
-    if (idx === undefined || idx < 0 || !state.dbcs[idx]) return null;
-    return state.dbcs[idx].dbc;
+  function findDbcForId(id) {
+    if (state.preferredDbcIdx !== null && state.dbcs[state.preferredDbcIdx]) {
+      const dbc = state.dbcs[state.preferredDbcIdx].dbc;
+      if (dbc.messages.has(id)) return dbc;
+    }
+    for (const d of state.dbcs) {
+      if (d.dbc.messages.has(id)) return d.dbc;
+    }
+    return null;
   }
 
   /* ---------- Log loading ---------- */
@@ -855,7 +843,7 @@
     const pill = document.createElement("div");
     pill.className = "file-pill";
     pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(fileName)}</span><span class="meta">${count.toLocaleString("es-AR")} msj.</span><button title="Quitar">✕</button>`;
-    pill.querySelector("button").onclick = () => { state.trace = []; state.channels = []; renderLogList(null, 0); recomputeAll(); };
+    pill.querySelector("button").onclick = () => { state.trace = []; renderLogList(null, 0); recomputeAll(); };
     list.appendChild(pill);
   }
 
@@ -866,23 +854,12 @@
       trace.sort((a, b) => a.t - b.t);
       state.trace = trace;
       state.t0 = trace.length ? trace[0].t : 0;
-      state.channels = [...new Set(trace.map((r) => r.channel))].sort((a, b) => a - b);
       renderLogList(file.name, trace.length);
-      rebuildChannelMap();
-      renderChannelMapBlock();
-      populateChannelFilter();
       resetChartSeries();
       renderChartStack();
       recomputeAll();
     };
     reader.readAsText(file, "windows-1252");
-  }
-
-  function populateChannelFilter() {
-    const sel = el("chanFilter");
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">Todos los canales</option>' + state.channels.map((c) => `<option value="${c}">Canal ${c}</option>`).join("");
-    sel.value = state.channels.includes(parseInt(cur, 10)) ? cur : "";
   }
 
   /* ---------- message index / stats ---------- */
@@ -902,7 +879,7 @@
       const key = r.channel + ":" + r.id;
       let e = idx.get(key);
       if (!e) {
-        const dbc = dbcForChannel(r.channel);
+        const dbc = findDbcForId(r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null };
         idx.set(key, e);
@@ -918,7 +895,7 @@
     const stats = new Map();
     for (let i = 0; i < state.trace.length; i++) {
       const r = state.trace[i];
-      const dbc = dbcForChannel(r.channel);
+      const dbc = findDbcForId(r.id);
       if (!dbc) continue;
       const decoded = decodeMessage(dbc, r.id, r.data);
       if (!decoded) continue;
@@ -1040,7 +1017,7 @@
   function buildSignalPickList(e) {
     const list = document.createElement("div");
     list.className = "sig-pick-list";
-    const dbc = dbcForChannel(e.channel);
+    const dbc = findDbcForId(e.id);
     const msg = dbc && dbc.messages.get(e.id);
     if (!msg || msg.signals.length === 0) {
       list.innerHTML = '<div class="sig-pick-row"><span class="spname">Sin señales definidas</span></div>';
@@ -1068,18 +1045,15 @@
   /* ---------- filtering ---------- */
   function applyFilter() {
     const q = (el("traceSearch").value || "").trim().toLowerCase();
-    const chanVal = el("chanFilter").value;
-    const chan = chanVal === "" ? null : parseInt(chanVal, 10);
     const onlyDecoded = el("onlyDecoded").checked;
 
-    if (!q && chan === null && !onlyDecoded) {
+    if (!q && !onlyDecoded) {
       state.filtered = null;
     } else {
       const out = [];
       for (let i = 0; i < state.trace.length; i++) {
         const r = state.trace[i];
-        if (chan !== null && r.channel !== chan) continue;
-        const dbc = dbcForChannel(r.channel);
+        const dbc = findDbcForId(r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         if (onlyDecoded && !def) continue;
         if (q) {
@@ -1146,7 +1120,7 @@
       const r = state.trace[rowIdx];
       const d = rowPool[p - first];
       d.style.height = ROW_H + "px";
-      const dbc = dbcForChannel(r.channel);
+      const dbc = findDbcForId(r.id);
       const def = dbc ? dbc.messages.get(r.id) : null;
       d.querySelector(".c-time").textContent = fmtTime(r.t);
       d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
@@ -1188,7 +1162,7 @@
       return;
     }
     const r = state.trace[rowIdx];
-    const dbc = dbcForChannel(r.channel);
+    const dbc = findDbcForId(r.id);
     const hexId = "0x" + r.id.toString(16).toUpperCase();
     const decoded = dbc ? decodeMessage(dbc, r.id, r.data) : null;
 
@@ -1276,7 +1250,7 @@
    * Pestaña "Gráficas" — señales apiladas en ejes de tiempo sincronizados
    * ========================================================= */
   function buildSeries(channel, id, signalName) {
-    const dbc = dbcForChannel(channel);
+    const dbc = findDbcForId(id);
     const msg = dbc && dbc.messages.get(id);
     const sigDef = msg && msg.signals.find((s) => s.name === signalName);
     const points = [];
@@ -1728,7 +1702,7 @@
     const out = [];
     for (const e of state.msgIndex.values()) {
       if (!e.name) continue;
-      const dbc = dbcForChannel(e.channel);
+      const dbc = findDbcForId(e.id);
       const msg = dbc && dbc.messages.get(e.id);
       if (!msg) continue;
       for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit });
@@ -1798,7 +1772,6 @@
 
   let searchDebounce;
   el("traceSearch").addEventListener("input", () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(applyFilter, 150); });
-  el("chanFilter").addEventListener("change", applyFilter);
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
   el("varSearch").addEventListener("input", renderVarList);
