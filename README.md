@@ -1,42 +1,42 @@
-# CANmann — Visor de trazas CAN
+# CANmann — CAN Trace Viewer
 
-Herramienta de escritorio/navegador para inspeccionar logs de una red CAN, al estilo de **CANalyzer**: decodifica cada mensaje usando archivos **DBC** y permite explorar la traza y graficar señales en el tiempo.
+A desktop/browser tool for inspecting CAN bus logs, in the style of **CANalyzer**: decodes every message using **DBC** files and lets you explore the trace and plot signals over time.
 
-Es un único archivo HTML autocontenido (`can_viewer.html`) — sin instalación, sin build, sin dependencias externas. Se abre directo en el navegador y todo corre localmente: ningún archivo cargado (DBC, CSV, ASC) sale de tu máquina.
+It's a single self-contained HTML file (`can_viewer.html`) — no install, no build step, no external dependencies. Open it straight in the browser and everything runs locally: no loaded file (DBC, CSV, ASC) ever leaves your machine.
 
-## Uso
+## Usage
 
-1. Abrí `can_viewer.html` en Chrome/Edge (necesita `<input type="file">`, drag & drop, Canvas 2D).
-2. **Archivos DBC**: cargá uno o más `.dbc`, uno por bus. Si el nombre incluye `CAN1`, `CAN2`, etc., el canal correspondiente del log se asigna automáticamente a ese DBC.
-3. **Log CAN**: cargá un `.csv` (formato `Timestamp,CAN_ID,DLC,Data`, el que genera `CANmann.py`) o un `.asc` (Vector ASCII).
-4. Elegí el DBC de cada canal en **Canal → DBC** si el mapeo automático no fue correcto.
+1. Open `can_viewer.html` in Chrome/Edge (needs `<input type="file">`, drag & drop, Canvas 2D).
+2. **DBC files**: load one or more `.dbc` files, one per bus. If the filename includes `CAN1`, `CAN2`, etc., the matching log channel is auto-assigned to that DBC.
+3. **CAN log**: load a `.csv` (format `Timestamp,CAN_ID,DLC,Data`, the one `CANmann.py` produces) or an `.asc` (Vector ASCII).
+4. Pick the DBC for each channel under **Channel → DBC** if the automatic mapping got it wrong.
 
-## Pestaña Traza
+## Trace tab
 
-- Tabla virtualizada (soporta cientos de miles de mensajes sin lag), con filtro por ID/nombre/canal y toggle "solo decodificados".
-- Panel de señales decodificadas al seleccionar un mensaje: valor físico, crudo, unidad, etiquetas de tablas `VAL_`, multiplexado, y aviso cuando un mensaje J1939 multi-paquete (ej. DM1) excede los 8 bytes del frame capturado.
-- Reproducción de la traza con control de velocidad.
-- Lista de "Mensajes vistos" ordenada por frecuencia, con indicador verde/rojo de decodificado o no.
-- "Más variaciones": ranking de señales por cantidad de cambios de valor reales (no solo por cuántas veces se transmitió el mensaje).
+- Virtualized table (handles hundreds of thousands of messages without lag), with filtering by ID/name/channel and a "decoded only" toggle.
+- Decoded signal panel when a message is selected: physical value, raw value, unit, `VAL_` table labels, multiplexing, and a warning when a multi-packet J1939 message (e.g. DM1) exceeds the 8 bytes of the captured frame.
+- Trace playback with a speed control.
+- "Messages seen" list sorted by frequency, with a green/red indicator for decoded vs. unknown.
+- "Most variation": ranks signals by how many times their value actually changed — not just how often the message was transmitted.
 
-## Pestaña Gráficas
+## Graphs tab
 
-- Elegí cualquier señal reconocida por el DBC (desde la lista de mensajes o el buscador) y se agrega como un carril apilado, con eje Y propio.
-- Línea escalonada (una señal CAN mantiene su valor hasta el próximo mensaje).
-- Cursor sincronizado entre todos los carriles y el eje de tiempo, con panel de lectura que muestra valor, descripción del DBC y timestamp real del último mensaje de cada señal.
-- Zoom con rueda del mouse y pan horizontal arrastrando; arrastre vertical para desplazarse entre carriles que no entran en pantalla.
-- Vista alternativa como tabla para cada señal.
+- Pick any DBC-recognized signal (from the message list or the search box) and it's added as its own stacked lane, with its own Y axis.
+- Step line (a CAN signal holds its value until the next message).
+- Synchronized cursor across every lane, with a readout panel showing each signal's value, DBC description, and the real timestamp of its last message.
+- Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
+- Alternative table view for each signal.
 
-## Formato de archivos soportados
+## Supported file formats
 
-| Archivo | Formato |
+| File | Format |
 |---|---|
-| DBC | Windows-1252, sintaxis estándar (`BO_`, `SG_`, `VAL_`, `CM_`, multiplexado simple) |
-| Log | `.csv` (`Timestamp,CAN_ID,DLC,Data`) o `.asc` (Vector ASCII, multi-canal) |
+| DBC | Windows-1252, standard syntax (`BO_`, `SG_`, `VAL_`, `CM_`, simple multiplexing) |
+| Log | `.csv` (`Timestamp,CAN_ID,DLC,Data`) or `.asc` (Vector ASCII, multi-channel) |
 
-La decodificación de bits (Intel/Motorola, con signo, multiplexado, truncamiento de mensajes multi-paquete) fue validada contra [`cantools`](https://github.com/cantools/cantools) antes de la primera versión.
+Bit-level decoding (Intel/Motorola, signed values, multiplexing, multi-packet message truncation) was validated against [`cantools`](https://github.com/cantools/cantools) before the first version shipped.
 
-## Limitaciones conocidas
+## Known limitations
 
-- No lee archivos `.blf` binarios directamente — Vector BLF usa contenedores comprimidos en un formato propietario. Convertí a `.csv` o `.asc` primero (por ejemplo con `python-can`).
-- Pensado para Chrome/Edge de escritorio; no optimizado para mobile.
+- Doesn't read raw `.blf` binary files — Vector BLF uses compressed containers in a proprietary format. Convert to `.csv` or `.asc` first (for example with `python-can`).
+- Built for desktop Chrome/Edge; not optimized for mobile.
