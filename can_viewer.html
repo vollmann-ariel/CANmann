@@ -136,7 +136,15 @@
   .block h2 {
     margin: 0 0 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--ink-faint); font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer; user-select: none;
   }
+  .block h2:hover { color: var(--ink); }
+  .block h2 .chev { flex: 0 0 auto; transition: transform .15s; opacity: .7; }
+  .block.collapsed h2 { margin-bottom: 0; }
+  .block.collapsed h2 .chev { transform: rotate(-90deg); }
+  .block.collapsed .block-body { display: none; }
+  .block.collapsed.rail-flex { flex: 0 0 auto !important; }
 
   /* ---------- Drop zones ---------- */
   .dropzone {
@@ -387,35 +395,51 @@
 
   <div class="workspace" id="workspace">
     <aside class="rail rail-left">
-      <section class="block">
-        <h2>1 · Archivos DBC</h2>
-        <label class="dropzone" id="dbcDrop">
-          <div><strong>Elegí archivos</strong> o arrastralos acá</div>
-          <div style="margin-top:2px;font-size:10.5px">Uno por bus (CAN1, CAN2, CAN3…)</div>
-          <input type="file" id="dbcInput" accept=".dbc" multiple />
-        </label>
-        <div class="file-pill-list" id="dbcList"></div>
+      <section class="block" data-block="dbc">
+        <h2><span>1 · Archivos DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <div class="block-body">
+          <label class="dropzone" id="dbcDrop">
+            <div><strong>Elegí archivos</strong> o arrastralos acá</div>
+            <div style="margin-top:2px;font-size:10.5px">Uno por bus (CAN1, CAN2, CAN3…)</div>
+            <input type="file" id="dbcInput" accept=".dbc" multiple />
+          </label>
+          <div class="file-pill-list" id="dbcList"></div>
+        </div>
       </section>
 
-      <section class="block">
-        <h2>2 · Log CAN</h2>
-        <label class="dropzone" id="logDrop">
-          <div><strong>Elegí un archivo</strong> o arrastralo acá</div>
-          <div style="margin-top:2px;font-size:10.5px">.csv (formato CANmann) o .asc (Vector ASCII)</div>
-          <input type="file" id="logInput" accept=".csv,.asc,.txt" />
-        </label>
-        <div class="file-pill-list" id="logList"></div>
+      <section class="block" data-block="log">
+        <h2><span>2 · Log CAN</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <div class="block-body">
+          <label class="dropzone" id="logDrop">
+            <div><strong>Elegí un archivo</strong> o arrastralo acá</div>
+            <div style="margin-top:2px;font-size:10.5px">.csv (formato CANmann) o .asc (Vector ASCII)</div>
+            <input type="file" id="logInput" accept=".csv,.asc,.txt" />
+          </label>
+          <div class="file-pill-list" id="logList"></div>
+        </div>
       </section>
 
-      <section class="block" id="chanMapBlock" style="display:none">
-        <h2>3 · Canal → DBC</h2>
-        <div id="chanMap"></div>
+      <section class="block" id="chanMapBlock" data-block="chanmap" style="display:none">
+        <h2><span>3 · Canal → DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <div class="block-body">
+          <div id="chanMap"></div>
+        </div>
       </section>
 
-      <section class="block" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
-        <h2>Mensajes vistos</h2>
-        <input class="msg-search" id="msgSearch" placeholder="Buscar por ID o nombre…" />
-        <div class="msg-list-wrap" id="msgList"></div>
+      <section class="block rail-flex" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
+        <h2><span>Mensajes vistos</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
+          <input class="msg-search" id="msgSearch" placeholder="Buscar por ID o nombre…" />
+          <div class="msg-list-wrap" id="msgList"></div>
+        </div>
+      </section>
+
+      <section class="block rail-flex collapsed" data-block="variations" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
+        <h2><span>Más variaciones</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
+          <input class="msg-search" id="varSearch" placeholder="Buscar señal…" />
+          <div class="msg-list-wrap" id="varList"></div>
+        </div>
       </section>
     </aside>
 
@@ -699,6 +723,7 @@
     playing: false,
     playTimer: null,
     tab: "traza",
+    varStats: null, // Map "chan:id:signal" -> {channel,id,signalName,msgName,unit,transitions,count} | null = sin calcular / desactualizado
     chart: {
       series: new Map(),   // key "chan:id:signal" -> {channel,id,signalName,msgName,unit,comment,colorVar,points:[{t,raw,value,label}]}
       order: [],           // keys, insertion order = lane order
@@ -849,6 +874,7 @@
     renderMessageList();
     applyFilter();
     renderSignalPanelFor(state.selectedRow);
+    invalidateVarStats();
   }
 
   function buildMessageIndex() {
@@ -867,6 +893,72 @@
       e.lastRow = i;
     }
     state.msgIndex = idx;
+  }
+
+  /* ---------- señales con más variaciones de estado ---------- */
+  function computeSignalVariations() {
+    const stats = new Map();
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      const dbc = dbcForChannel(r.channel);
+      if (!dbc) continue;
+      const decoded = decodeMessage(dbc, r.id, r.data);
+      if (!decoded) continue;
+      for (const sig of decoded.signals) {
+        const key = r.channel + ":" + r.id + ":" + sig.name;
+        let e = stats.get(key);
+        if (!e) {
+          e = { channel: r.channel, id: r.id, signalName: sig.name, msgName: decoded.message.name, unit: sig.unit, transitions: 0, count: 0, lastRaw: null };
+          stats.set(key, e);
+        }
+        e.count++;
+        if (e.lastRaw !== null && sig.raw !== e.lastRaw) e.transitions++;
+        e.lastRaw = sig.raw;
+      }
+    }
+    return stats;
+  }
+
+  function invalidateVarStats() {
+    state.varStats = null;
+    const block = document.querySelector('.block[data-block="variations"]');
+    if (block && !block.classList.contains("collapsed")) ensureVarStatsAndRender();
+  }
+
+  function ensureVarStatsAndRender() {
+    const wrap = el("varList");
+    if (state.trace.length === 0) { wrap.innerHTML = '<div class="sig-empty">Cargá un log y al menos un DBC para ver esto.</div>'; return; }
+    if (state.varStats) { renderVarList(); return; }
+    wrap.innerHTML = '<div class="sig-empty">Calculando variaciones…</div>';
+    setTimeout(() => {
+      state.varStats = computeSignalVariations();
+      renderVarList();
+    }, 10);
+  }
+
+  function renderVarList() {
+    const wrap = el("varList");
+    if (!state.varStats) return;
+    const q = (el("varSearch").value || "").toLowerCase();
+    const entries = [...state.varStats.values()].sort((a, b) => b.transitions - a.transitions);
+    if (entries.length === 0) { wrap.innerHTML = '<div class="sig-empty">Ninguna señal decodificada todavía.</div>'; return; }
+    const maxT = Math.max(1, entries[0].transitions);
+    wrap.innerHTML = "";
+    for (const e of entries) {
+      if (q && !(e.signalName.toLowerCase().includes(q) || e.msgName.toLowerCase().includes(q))) continue;
+      const row = document.createElement("div");
+      row.className = "msg-row";
+      row.title = "Agregar a Gráficas";
+      row.innerHTML = `
+        <span class="body">
+          <div class="name">${escapeHtml(e.signalName)}</div>
+          <div class="sub"><span>${escapeHtml(e.msgName)}</span><span>·</span><span>Can ${e.channel}</span></div>
+        </span>
+        <span class="count">${e.transitions.toLocaleString("es-AR")}</span>
+        <span class="freqbar" style="width:${Math.max(4, (e.transitions / maxT) * 100)}%"></span>`;
+      row.onclick = () => { setTab("graficas"); addSignalToChart(e.channel, e.id, e.signalName); };
+      wrap.appendChild(row);
+    }
   }
 
   function renderStats() {
@@ -1625,6 +1717,15 @@
   el("chanFilter").addEventListener("change", applyFilter);
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
+  el("varSearch").addEventListener("input", renderVarList);
+
+  document.querySelectorAll(".block h2").forEach((h2) => {
+    h2.addEventListener("click", () => {
+      const block = h2.closest(".block");
+      block.classList.toggle("collapsed");
+      if (block.dataset.block === "variations" && !block.classList.contains("collapsed")) ensureVarStatsAndRender();
+    });
+  });
 
   el("playBtn").addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
   el("stepFwdBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() + 1); });
