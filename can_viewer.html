@@ -313,6 +313,11 @@
   .sig-pick-row.added .spname { color: var(--ink); font-weight: 600; }
   .sig-pick-row .swatch { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 
+  /* ---------- DBC definitions browser ---------- */
+  .dbcdefs-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
+  .dbcdefs-pane .msg-list-wrap { padding: 10px 14px; }
+  .dbcdefs-pane .msg-row .name { white-space: normal; }
+
   /* ---------- Chart view ---------- */
   .chart-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
   .chart-toolbar {
@@ -390,6 +395,7 @@
     <nav class="tabbar">
       <button type="button" class="tab-btn active" id="tabTrazaBtn">Traza</button>
       <button type="button" class="tab-btn" id="tabGraficasBtn">Gráficas</button>
+      <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC</button>
     </nav>
     <div class="stats-strip" id="statsStrip"></div>
   </header>
@@ -518,6 +524,24 @@
     <aside class="rail rail-right tab-graficas tab-hidden" id="chartReadoutRail">
       <div class="chart-readout" id="chartReadout">
         <div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>
+      </div>
+    </aside>
+
+    <main class="dbcdefs-pane tab-dbcdefs tab-hidden" id="dbcDefsPane">
+      <div class="toolbar">
+        <select id="dbcDefsFileSel" title="Elegir archivo DBC"></select>
+        <div class="search-box">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input id="dbcDefsSearch" placeholder="Buscar mensaje o señal…" />
+        </div>
+        <span class="result-count" id="dbcDefsCount"></span>
+      </div>
+      <div class="msg-list-wrap" id="dbcDefsList"></div>
+    </main>
+
+    <aside class="rail rail-right tab-dbcdefs tab-hidden" id="dbcDefsDetailRail">
+      <div class="sig-panel" id="dbcDefsDetail">
+        <div class="sig-empty">Elegí un mensaje para ver su definición completa.</div>
       </div>
     </aside>
   </div>
@@ -725,6 +749,7 @@
   const state = {
     dbcs: [],            // { fileName, dbc, msgCount, sigCount }
     preferredDbcIdx: null, // índice en state.dbcs a probar primero cuando un ID está definido en más de un DBC cargado
+    dbcDefs: { dbcIdx: null, selectedId: null }, // pestaña "DBC": qué archivo se está explorando y qué mensaje está seleccionado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     filtered: null,       // array of row indices, or null = all
@@ -817,6 +842,10 @@
           if (state.preferredDbcIdx === i) state.preferredDbcIdx = null;
           else if (state.preferredDbcIdx > i) state.preferredDbcIdx -= 1;
         }
+        if (state.dbcDefs.dbcIdx !== null) {
+          if (state.dbcDefs.dbcIdx === i) { state.dbcDefs.dbcIdx = null; state.dbcDefs.selectedId = null; }
+          else if (state.dbcDefs.dbcIdx > i) state.dbcDefs.dbcIdx -= 1;
+        }
         renderDbcList();
         recomputeAll();
         if (removed) forgetStoredDbc(removed.fileName);
@@ -824,6 +853,7 @@
       list.appendChild(pill);
     });
     renderPreferredDbcBlock();
+    renderDbcDefsFileSel();
   }
 
   function addDbcFile(fileName, text, opts) {
@@ -863,6 +893,104 @@
       if (d.dbc.messages.has(id)) return d.dbc;
     }
     return null;
+  }
+
+  /* ---------- pestaña "DBC": catálogo de definiciones ---------- */
+  function renderDbcDefsFileSel() {
+    const sel = el("dbcDefsFileSel");
+    if (state.dbcs.length === 0) {
+      sel.innerHTML = '<option value="-1">No hay DBC cargados</option>';
+      state.dbcDefs.dbcIdx = null;
+      state.dbcDefs.selectedId = null;
+      renderDbcDefsList();
+      renderDbcDefsDetail();
+      return;
+    }
+    if (state.dbcDefs.dbcIdx === null || !state.dbcs[state.dbcDefs.dbcIdx]) {
+      state.dbcDefs.dbcIdx = state.preferredDbcIdx !== null && state.dbcs[state.preferredDbcIdx] ? state.preferredDbcIdx : 0;
+    }
+    sel.innerHTML = state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
+    sel.value = state.dbcDefs.dbcIdx;
+    sel.onchange = () => {
+      state.dbcDefs.dbcIdx = parseInt(sel.value, 10);
+      state.dbcDefs.selectedId = null;
+      renderDbcDefsList();
+      renderDbcDefsDetail();
+    };
+    renderDbcDefsList();
+  }
+
+  function currentDbcDefsDbc() {
+    if (state.dbcDefs.dbcIdx === null || !state.dbcs[state.dbcDefs.dbcIdx]) return null;
+    return state.dbcs[state.dbcDefs.dbcIdx].dbc;
+  }
+
+  function renderDbcDefsList() {
+    const wrap = el("dbcDefsList");
+    const dbc = currentDbcDefsDbc();
+    if (!dbc) {
+      wrap.innerHTML = '<div class="sig-empty">Cargá un archivo DBC para ver sus mensajes.</div>';
+      el("dbcDefsCount").textContent = "";
+      return;
+    }
+    const q = (el("dbcDefsSearch").value || "").trim().toLowerCase();
+    const all = [...dbc.messages.values()].sort((a, b) => a.name.localeCompare(b.name));
+    wrap.innerHTML = "";
+    let shown = 0;
+    for (const msg of all) {
+      if (q) {
+        const hexId = "0x" + msg.id.toString(16);
+        const hit = msg.name.toLowerCase().includes(q) || hexId.toLowerCase().includes(q) || msg.signals.some((s) => s.name.toLowerCase().includes(q));
+        if (!hit) continue;
+      }
+      shown++;
+      const row = document.createElement("div");
+      row.className = "msg-row" + (state.dbcDefs.selectedId === msg.id ? " active" : "");
+      row.innerHTML = `
+        <span class="body">
+          <div class="name">${escapeHtml(msg.name)}</div>
+          <div class="sub"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>·</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>·</span><span>${escapeHtml(msg.sender)}</span>` : ""}</div>
+        </span>
+        <span class="count">${msg.signals.length} señ.</span>`;
+      row.onclick = () => { state.dbcDefs.selectedId = msg.id; renderDbcDefsList(); renderDbcDefsDetail(); };
+      wrap.appendChild(row);
+    }
+    if (shown === 0) wrap.innerHTML = '<div class="sig-empty">Ningún mensaje coincide con la búsqueda.</div>';
+    el("dbcDefsCount").textContent = shown.toLocaleString("es-AR") + " / " + all.length.toLocaleString("es-AR");
+  }
+
+  function renderDbcDefsDetail() {
+    const panel = el("dbcDefsDetail");
+    const dbc = currentDbcDefsDbc();
+    const msg = dbc && state.dbcDefs.selectedId !== null ? dbc.messages.get(state.dbcDefs.selectedId) : null;
+    if (!msg) {
+      panel.innerHTML = '<div class="sig-empty">Elegí un mensaje para ver su definición completa.</div>';
+      return;
+    }
+    let html = `<div class="sig-header">
+      <div class="msgname">${escapeHtml(msg.name)}</div>
+      <div class="msgmeta"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>Emisor: ${escapeHtml(msg.sender)}</span>` : ""}</div>
+      ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
+    </div>`;
+    if (msg.isMultiplexed) html += '<div class="mux-note">Señales multiplexadas — se muestran todas las ramas</div>';
+    html += '<div class="sig-table">';
+    if (msg.signals.length === 0) html += '<div class="sig-empty">Este mensaje no tiene señales definidas.</div>';
+    for (const sig of msg.signals) {
+      const hasValueTable = !!sig.valueTable;
+      const scale = sig.factor !== 1 || sig.offset !== 0
+        ? ` · crudo × ${formatNum(sig.factor)}${sig.offset !== 0 ? " " + (sig.offset > 0 ? "+" : "") + formatNum(sig.offset) : ""}`
+        : "";
+      const rangeStr = hasValueTable ? `${sig.valueTable.size} valor${sig.valueTable.size === 1 ? "" : "es"} posibles` : `${formatNum(sig.min)} – ${formatNum(sig.max)}`;
+      const muxTag = sig.isMultiplexor ? " ⚑ multiplexor" : sig.muxValue !== null ? ` (m${sig.muxValue})` : "";
+      html += `<div class="sig-row">
+        <div class="top"><span class="sname">${escapeHtml(sig.name)}${muxTag}</span><span class="sval">${escapeHtml(rangeStr)}${!hasValueTable && sig.unit ? `<span class="unit">${escapeHtml(sig.unit)}</span>` : ""}</span></div>
+        <div class="sraw">${formatBitSpec(sig)}${scale}</div>
+        ${hasValueTable ? `<div class="scomment">${[...sig.valueTable.entries()].map(([k, v]) => `${k}=${escapeHtml(v)}`).join(", ")}</div>` : ""}
+        ${sig.comment ? `<div class="scomment">${escapeHtml(sig.comment)}</div>` : ""}
+      </div>`;
+    }
+    html += "</div>";
+    panel.innerHTML = html;
   }
 
   /* ---------- Log loading ---------- */
@@ -1773,10 +1901,13 @@
     state.tab = tab;
     el("tabTrazaBtn").classList.toggle("active", tab === "traza");
     el("tabGraficasBtn").classList.toggle("active", tab === "graficas");
+    el("tabDbcDefsBtn").classList.toggle("active", tab === "dbcdefs");
     document.querySelectorAll(".tab-traza").forEach((n) => n.classList.toggle("tab-hidden", tab !== "traza"));
     document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
+    document.querySelectorAll(".tab-dbcdefs").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcdefs"));
     renderMessageList();
     if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) requestRedraw(); }
+    if (tab === "dbcdefs") renderDbcDefsFileSel();
   }
 
   /* ---------- misc UI wiring ---------- */
@@ -1820,6 +1951,8 @@
 
   el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
   el("tabGraficasBtn").addEventListener("click", () => setTab("graficas"));
+  el("tabDbcDefsBtn").addEventListener("click", () => setTab("dbcdefs"));
+  el("dbcDefsSearch").addEventListener("input", renderDbcDefsList);
   el("chartResetZoomBtn").addEventListener("click", () => {
     if (state.chart.fullRange) { state.chart.range = { ...state.chart.fullRange }; requestRedraw(); }
   });
