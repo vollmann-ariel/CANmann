@@ -370,11 +370,13 @@
   .chart-readout { padding: 14px; }
   .chart-readout .hint { color: var(--ink-faint); font-size: 12px; }
   .chart-readout .t { font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; }
-  .chart-readout-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .chart-readout-row { display: flex; flex-direction: column; gap: 3px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
+  .chart-readout-row .top { display: flex; align-items: baseline; gap: 8px; }
   .chart-readout-row .swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
   .chart-readout-row .rname { flex: 1 1 auto; font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chart-readout-row .rval { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
   .chart-readout-row .rval .u { color: var(--ink-faint); font-weight: 600; font-size: 10px; margin-left: 2px; }
+  .chart-readout-row .rdesc { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; padding-left: 17px; }
 </style>
 
 <div class="app">
@@ -1554,6 +1556,7 @@
       const vp = valueAtTime(s.points, t);
       const row = document.createElement("div");
       row.className = "chart-readout-row";
+      const top = document.createElement("div"); top.className = "top";
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
       const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
       const val = document.createElement("span"); val.className = "rval";
@@ -1566,7 +1569,12 @@
           if (s.unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = s.unit; val.appendChild(u); }
         }
       } else { val.textContent = "—"; }
-      row.appendChild(swatch); row.appendChild(name); row.appendChild(val);
+      top.appendChild(swatch); top.appendChild(name); top.appendChild(val);
+      row.appendChild(top);
+      if (s.comment) {
+        const desc = document.createElement("div"); desc.className = "rdesc"; desc.textContent = s.comment;
+        row.appendChild(desc);
+      }
       panel.appendChild(row);
       if (s.el && s.el.lval) s.el.lval.textContent = compact;
     }
