@@ -308,18 +308,12 @@
   .msg-row.expandable { cursor: pointer; }
   .sig-pick-list { padding: 0 4px 6px 26px; display: flex; flex-direction: column; gap: 1px; }
   .sig-pick-row {
-    display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; font-size: 11px;
+    display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; font-size: 11px; cursor: pointer;
   }
   .sig-pick-row:hover { background: var(--surface-2); }
   .sig-pick-row .spname { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
   .sig-pick-row .spunit { color: var(--ink-faint); font-size: 9.5px; }
-  .sig-pick-row button {
-    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border);
-    background: var(--surface-2); color: var(--ink-dim); cursor: pointer; font-size: 12px; line-height: 1;
-  }
-  .sig-pick-row button:hover { border-color: var(--accent); color: var(--accent); }
   .sig-pick-row.added .spname { color: var(--ink); font-weight: 600; }
-  .sig-pick-row.added button { background: var(--critical); border-color: var(--critical); color: #fff; }
   .sig-pick-row .swatch { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 
   /* ---------- Chart view ---------- */
@@ -1035,13 +1029,10 @@
       const added = state.chart.series.has(key);
       const row = document.createElement("div");
       row.className = "sig-pick-row" + (added ? " added" : "");
-      const swatch = added ? `<span class="swatch" style="background:var(${state.chart.series.get(key).colorVar})"></span>` : "";
-      row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span><button type="button" title="${added ? "Quitar de la gráfica" : "Agregar a la gráfica"}">${added ? "✕" : "✛"}</button>`;
-      row.querySelector("button").onclick = (ev) => {
-        ev.stopPropagation();
-        if (added) removeSignalFromChart(key);
-        else addSignalToChart(e.channel, e.id, sig.name);
-      };
+      row.title = added ? "Quitar de la gráfica" : "Agregar a la gráfica";
+      const swatch = `<span class="swatch" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
+      row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span>`;
+      row.onclick = (ev) => { ev.stopPropagation(); toggleSignalInChart(e.channel, e.id, sig.name, { switchTab: false }); };
       list.appendChild(row);
     }
     return list;
