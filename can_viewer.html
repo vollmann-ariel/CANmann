@@ -1,4 +1,4 @@
-<title>CANmann — Visor de trazas CAN</title>
+<title>CANmann — CAN Trace Viewer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root {
@@ -389,12 +389,12 @@
       <canvas class="wave" id="waveCanvas" width="46" height="28" aria-hidden="true"></canvas>
       <div>
         <h1>CAN<span>mann</span></h1>
-        <div class="tagline">Visor de trazas CAN · decodificación DBC</div>
+        <div class="tagline">CAN Trace Viewer · DBC decoding</div>
       </div>
     </div>
     <nav class="tabbar">
-      <button type="button" class="tab-btn active" id="tabTrazaBtn">Traza</button>
-      <button type="button" class="tab-btn" id="tabGraficasBtn">Gráficas</button>
+      <button type="button" class="tab-btn active" id="tabTrazaBtn">Trace</button>
+      <button type="button" class="tab-btn" id="tabGraficasBtn">Graphs</button>
       <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC</button>
     </nav>
     <div class="stats-strip" id="statsStrip"></div>
@@ -403,11 +403,11 @@
   <div class="workspace" id="workspace">
     <aside class="rail rail-left">
       <section class="block" data-block="dbc">
-        <h2><span>1 · Archivos DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>1 · DBC Files</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <label class="dropzone" id="dbcDrop">
-            <div><strong>Elegí archivos</strong> o arrastralos acá</div>
-            <div style="margin-top:2px;font-size:10.5px">Uno por bus (CAN1, CAN2, CAN3…)</div>
+            <div><strong>Choose files</strong> or drag them here</div>
+            <div style="margin-top:2px;font-size:10.5px">One per bus (CAN1, CAN2, CAN3…)</div>
             <input type="file" id="dbcInput" accept=".dbc" multiple />
           </label>
           <div class="file-pill-list" id="dbcList"></div>
@@ -415,11 +415,11 @@
       </section>
 
       <section class="block" data-block="log">
-        <h2><span>2 · Log CAN</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>2 · CAN Log</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <label class="dropzone" id="logDrop">
-            <div><strong>Elegí un archivo</strong> o arrastralo acá</div>
-            <div style="margin-top:2px;font-size:10.5px">.csv (formato CANmann) o .asc (Vector ASCII)</div>
+            <div><strong>Choose a file</strong> or drag it here</div>
+            <div style="margin-top:2px;font-size:10.5px">.csv (CANmann format) or .asc (Vector ASCII)</div>
             <input type="file" id="logInput" accept=".csv,.asc,.txt" />
           </label>
           <div class="file-pill-list" id="logList"></div>
@@ -427,24 +427,24 @@
       </section>
 
       <section class="block" id="chanMapBlock" data-block="chanmap" style="display:none">
-        <h2><span>3 · DBC preferido</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>3 · Preferred DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <div id="chanMap"></div>
         </div>
       </section>
 
       <section class="block rail-flex" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
-        <h2><span>Mensajes vistos</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>Messages Seen</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
-          <input class="msg-search" id="msgSearch" placeholder="Buscar por ID o nombre…" />
+          <input class="msg-search" id="msgSearch" placeholder="Search by ID or name…" />
           <div class="msg-list-wrap" id="msgList"></div>
         </div>
       </section>
 
       <section class="block rail-flex collapsed" data-block="variations" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
-        <h2><span>Más variaciones</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+        <h2><span>Most Active</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
-          <input class="msg-search" id="varSearch" placeholder="Buscar señal…" />
+          <input class="msg-search" id="varSearch" placeholder="Search signal…" />
           <div class="msg-list-wrap" id="varList"></div>
         </div>
       </section>
@@ -454,18 +454,18 @@
       <div class="toolbar">
         <div class="search-box">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input id="traceSearch" placeholder="Filtrar traza: ID, nombre, canal…" />
+          <input id="traceSearch" placeholder="Filter trace: ID, name, channel…" />
         </div>
-        <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Solo decodificados</label>
+        <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Decoded only</label>
         <span class="result-count" id="resultCount"></span>
         <div class="playbar">
-          <button class="iconbtn" id="stepBackBtn" title="Mensaje anterior">
+          <button class="iconbtn" id="stepBackBtn" title="Previous message">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6L10 12l10 6z"/></svg>
           </button>
-          <button class="iconbtn" id="playBtn" title="Reproducir / pausar">
+          <button class="iconbtn" id="playBtn" title="Play / pause">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
           </button>
-          <button class="iconbtn" id="stepFwdBtn" title="Mensaje siguiente">
+          <button class="iconbtn" id="stepFwdBtn" title="Next message">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2v12h2zM4 6l10 6-10 6z"/></svg>
           </button>
           <select id="speedSel">
@@ -479,7 +479,7 @@
 
       <div class="trace-table">
         <div class="trace-cols trace-head">
-          <div>Tiempo</div><div>Can</div><div>Dir</div><div>ID</div><div>Mensaje</div><div>DLC</div><div>Datos</div>
+          <div>Time</div><div>Ch</div><div>Dir</div><div>ID</div><div>Message</div><div>DLC</div><div>Data</div>
         </div>
         <div class="trace-viewport" id="traceViewport">
           <div class="trace-spacer" id="traceSpacer">
@@ -487,33 +487,35 @@
           </div>
         </div>
         <div class="empty-hint" id="emptyHint">
-          Cargá al menos un archivo DBC y un log CAN para empezar.<br />
-          Podés usar los mismos archivos de tu carpeta CANmann (por ejemplo <span class="mono">output.csv</span> o <span class="mono">asc_file.asc</span>).
+          <div>
+            Load at least one DBC file and a CAN log to get started.<br />
+            You can use the same files from your CANmann folder (for example <span class="mono">output.csv</span> or <span class="mono">asc_file.asc</span>).
+          </div>
         </div>
       </div>
     </main>
 
     <aside class="rail rail-right tab-traza">
       <div class="sig-panel" id="sigPanel">
-        <div class="sig-empty">Elegí un mensaje de la traza para ver sus señales decodificadas.</div>
+        <div class="sig-empty">Select a trace message to see its decoded signals.</div>
       </div>
     </aside>
 
     <main class="chart-pane tab-graficas tab-hidden" id="chartPane">
       <div class="chart-toolbar">
         <div class="chart-add-box">
-          <input id="chartAddInput" placeholder="Agregar señal: nombre, mensaje o ID…" autocomplete="off" />
+          <input id="chartAddInput" placeholder="Add signal: name, message, or ID…" autocomplete="off" />
           <div class="chart-add-results" id="chartAddResults"></div>
         </div>
-        <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Restablecer zoom">
+        <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
-        <label class="toggle"><input type="checkbox" id="chartTableToggle" /> Ver como tabla</label>
-        <span class="result-count" id="chartHint">Agregá señales desde la lista de la izquierda (✛) o con el buscador.</span>
+        <label class="toggle"><input type="checkbox" id="chartTableToggle" /> View as table</label>
+        <span class="result-count" id="chartHint">Add signals from the list on the left (✛) or with the search box.</span>
       </div>
       <div class="chart-scroll" id="chartScroll">
         <div class="chart-stack" id="chartStack">
-          <div class="chart-empty" id="chartEmptyHint">Todavía no agregaste ninguna señal. Elegí un mensaje decodificado a la izquierda y sumá alguna de sus señales con el botón ✛.</div>
+          <div class="chart-empty" id="chartEmptyHint">You haven't added any signals yet. Pick a decoded message on the left and add one of its signals with the ✛ button.</div>
         </div>
       </div>
       <div class="chart-axis-row" id="chartAxisRow" style="display:none">
@@ -523,16 +525,16 @@
 
     <aside class="rail rail-right tab-graficas tab-hidden" id="chartReadoutRail">
       <div class="chart-readout" id="chartReadout">
-        <div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>
+        <div class="hint">Hover over a chart to see each signal's value at that instant.</div>
       </div>
     </aside>
 
     <main class="dbcdefs-pane tab-dbcdefs tab-hidden" id="dbcDefsPane">
       <div class="toolbar">
-        <select id="dbcDefsFileSel" title="Elegir archivo DBC"></select>
+        <select id="dbcDefsFileSel" title="Choose DBC file"></select>
         <div class="search-box">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input id="dbcDefsSearch" placeholder="Buscar mensaje o señal…" />
+          <input id="dbcDefsSearch" placeholder="Search message or signal…" />
         </div>
         <span class="result-count" id="dbcDefsCount"></span>
       </div>
@@ -541,7 +543,7 @@
 
     <aside class="rail rail-right tab-dbcdefs tab-hidden" id="dbcDefsDetailRail">
       <div class="sig-panel" id="dbcDefsDetail">
-        <div class="sig-empty">Elegí un mensaje para ver su definición completa.</div>
+        <div class="sig-empty">Select a message to see its full definition.</div>
       </div>
     </aside>
   </div>
@@ -634,7 +636,7 @@
     const hi = signalMaxBit(sig);
     const lo = hi - sig.length + 1;
     const order = sig.byteOrder === "intel" ? "Intel" : "Motorola";
-    const sign = sig.signed ? "con signo" : "sin signo";
+    const sign = sig.signed ? "signed" : "unsigned";
     return `bits ${lo}-${hi} (${sig.length} bit${sig.length === 1 ? "" : "s"}, ${order}, ${sign})`;
   }
 
@@ -804,7 +806,7 @@
   const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbcs";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
-      if (!window.indexedDB) { reject(new Error("IndexedDB no disponible")); return; }
+      if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
       const req = indexedDB.open(DBC_DB_NAME, 1);
       req.onupgradeneeded = () => { req.result.createObjectStore(DBC_STORE_NAME, { keyPath: "fileName" }); };
       req.onsuccess = () => resolve(req.result);
@@ -835,7 +837,7 @@
     state.dbcs.forEach((d, i) => {
       const pill = document.createElement("div");
       pill.className = "file-pill";
-      pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${d.msgCount} msg</span><button title="Quitar">✕</button>`;
+      pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${d.msgCount} msgs</span><button title="Remove">✕</button>`;
       pill.querySelector("button").onclick = () => {
         const removed = state.dbcs.splice(i, 1)[0];
         if (state.preferredDbcIdx !== null) {
@@ -858,7 +860,7 @@
 
   function addDbcFile(fileName, text, opts) {
     let dbc;
-    try { dbc = parseDBC(text); } catch (e) { alert("No se pudo interpretar " + fileName + ": " + e.message); return; }
+    try { dbc = parseDBC(text); } catch (e) { alert("Couldn't parse " + fileName + ": " + e.message); return; }
     let sigCount = 0;
     dbc.messages.forEach((m) => (sigCount += m.signals.length));
     state.dbcs.push({ fileName, dbc, msgCount: dbc.messages.size, sigCount });
@@ -873,14 +875,14 @@
     block.style.display = "";
     wrap.innerHTML = "";
     const sel = document.createElement("select");
-    sel.innerHTML = '<option value="-1">Sin preferencia (usa el primero que lo reconozca)</option>' +
+    sel.innerHTML = '<option value="-1">No preference (use the first one that recognizes it)</option>' +
       state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
     sel.value = state.preferredDbcIdx !== null ? state.preferredDbcIdx : -1;
     sel.onchange = () => { state.preferredDbcIdx = sel.value === "-1" ? null : parseInt(sel.value, 10); recomputeAll(); };
     wrap.appendChild(sel);
     const hint = document.createElement("div");
     hint.style.cssText = "margin-top:6px;font-size:10.5px;color:var(--ink-faint)";
-    hint.textContent = "Se prueba primero cuando el mismo ID está definido en más de un DBC cargado. Si no lo reconoce, se prueban los demás DBC cargados en orden.";
+    hint.textContent = "Tried first when the same ID is defined in more than one loaded DBC. If it isn't recognized there, the other loaded DBCs are tried in order.";
     wrap.appendChild(hint);
   }
 
@@ -899,7 +901,7 @@
   function renderDbcDefsFileSel() {
     const sel = el("dbcDefsFileSel");
     if (state.dbcs.length === 0) {
-      sel.innerHTML = '<option value="-1">No hay DBC cargados</option>';
+      sel.innerHTML = '<option value="-1">No DBC files loaded</option>';
       state.dbcDefs.dbcIdx = null;
       state.dbcDefs.selectedId = null;
       renderDbcDefsList();
@@ -929,7 +931,7 @@
     const wrap = el("dbcDefsList");
     const dbc = currentDbcDefsDbc();
     if (!dbc) {
-      wrap.innerHTML = '<div class="sig-empty">Cargá un archivo DBC para ver sus mensajes.</div>';
+      wrap.innerHTML = '<div class="sig-empty">Load a DBC file to see its messages.</div>';
       el("dbcDefsCount").textContent = "";
       return;
     }
@@ -951,12 +953,12 @@
           <div class="name">${escapeHtml(msg.name)}</div>
           <div class="sub"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>·</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>·</span><span>${escapeHtml(msg.sender)}</span>` : ""}</div>
         </span>
-        <span class="count">${msg.signals.length} señ.</span>`;
+        <span class="count">${msg.signals.length} sig.</span>`;
       row.onclick = () => { state.dbcDefs.selectedId = msg.id; renderDbcDefsList(); renderDbcDefsDetail(); };
       wrap.appendChild(row);
     }
-    if (shown === 0) wrap.innerHTML = '<div class="sig-empty">Ningún mensaje coincide con la búsqueda.</div>';
-    el("dbcDefsCount").textContent = shown.toLocaleString("es-AR") + " / " + all.length.toLocaleString("es-AR");
+    if (shown === 0) wrap.innerHTML = '<div class="sig-empty">No message matches the search.</div>';
+    el("dbcDefsCount").textContent = shown.toLocaleString("en-US") + " / " + all.length.toLocaleString("en-US");
   }
 
   function renderDbcDefsDetail() {
@@ -964,23 +966,23 @@
     const dbc = currentDbcDefsDbc();
     const msg = dbc && state.dbcDefs.selectedId !== null ? dbc.messages.get(state.dbcDefs.selectedId) : null;
     if (!msg) {
-      panel.innerHTML = '<div class="sig-empty">Elegí un mensaje para ver su definición completa.</div>';
+      panel.innerHTML = '<div class="sig-empty">Select a message to see its full definition.</div>';
       return;
     }
     let html = `<div class="sig-header">
       <div class="msgname">${escapeHtml(msg.name)}</div>
-      <div class="msgmeta"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>Emisor: ${escapeHtml(msg.sender)}</span>` : ""}</div>
+      <div class="msgmeta"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}</div>
       ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
     </div>`;
-    if (msg.isMultiplexed) html += '<div class="mux-note">Señales multiplexadas — se muestran todas las ramas</div>';
+    if (msg.isMultiplexed) html += '<div class="mux-note">Multiplexed signals — showing all branches</div>';
     html += '<div class="sig-table">';
-    if (msg.signals.length === 0) html += '<div class="sig-empty">Este mensaje no tiene señales definidas.</div>';
+    if (msg.signals.length === 0) html += '<div class="sig-empty">This message has no signals defined.</div>';
     for (const sig of msg.signals) {
       const hasValueTable = !!sig.valueTable;
       const scale = sig.factor !== 1 || sig.offset !== 0
-        ? ` · crudo × ${formatNum(sig.factor)}${sig.offset !== 0 ? " " + (sig.offset > 0 ? "+" : "") + formatNum(sig.offset) : ""}`
+        ? ` · raw × ${formatNum(sig.factor)}${sig.offset !== 0 ? " " + (sig.offset > 0 ? "+" : "") + formatNum(sig.offset) : ""}`
         : "";
-      const rangeStr = hasValueTable ? `${sig.valueTable.size} valor${sig.valueTable.size === 1 ? "" : "es"} posibles` : `${formatNum(sig.min)} – ${formatNum(sig.max)}`;
+      const rangeStr = hasValueTable ? `${sig.valueTable.size} possible value${sig.valueTable.size === 1 ? "" : "s"}` : `${formatNum(sig.min)} – ${formatNum(sig.max)}`;
       const muxTag = sig.isMultiplexor ? " ⚑ multiplexor" : sig.muxValue !== null ? ` (m${sig.muxValue})` : "";
       html += `<div class="sig-row">
         <div class="top"><span class="sname">${escapeHtml(sig.name)}${muxTag}</span><span class="sval">${escapeHtml(rangeStr)}${!hasValueTable && sig.unit ? `<span class="unit">${escapeHtml(sig.unit)}</span>` : ""}</span></div>
@@ -1000,7 +1002,7 @@
     if (!fileName) return;
     const pill = document.createElement("div");
     pill.className = "file-pill";
-    pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(fileName)}</span><span class="meta">${count.toLocaleString("es-AR")} msj.</span><button title="Quitar">✕</button>`;
+    pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(fileName)}</span><span class="meta">${count.toLocaleString("en-US")} msgs.</span><button title="Remove">✕</button>`;
     pill.querySelector("button").onclick = () => { state.trace = []; renderLogList(null, 0); recomputeAll(); };
     list.appendChild(pill);
   }
@@ -1080,9 +1082,9 @@
 
   function ensureVarStatsAndRender() {
     const wrap = el("varList");
-    if (state.trace.length === 0) { wrap.innerHTML = '<div class="sig-empty">Cargá un log y al menos un DBC para ver esto.</div>'; return; }
+    if (state.trace.length === 0) { wrap.innerHTML = '<div class="sig-empty">Load a log and at least one DBC to see this.</div>'; return; }
     if (state.varStats) { renderVarList(); return; }
-    wrap.innerHTML = '<div class="sig-empty">Calculando variaciones…</div>';
+    wrap.innerHTML = '<div class="sig-empty">Calculating changes…</div>';
     setTimeout(() => {
       state.varStats = computeSignalVariations();
       renderVarList();
@@ -1094,7 +1096,7 @@
     if (!state.varStats) return;
     const q = (el("varSearch").value || "").toLowerCase();
     const entries = [...state.varStats.values()].sort((a, b) => b.transitions - a.transitions);
-    if (entries.length === 0) { wrap.innerHTML = '<div class="sig-empty">Ninguna señal decodificada todavía.</div>'; return; }
+    if (entries.length === 0) { wrap.innerHTML = '<div class="sig-empty">No decoded signal yet.</div>'; return; }
     const maxT = Math.max(1, entries[0].transitions);
     wrap.innerHTML = "";
     for (const e of entries) {
@@ -1103,15 +1105,15 @@
       const added = state.chart.series.has(key);
       const row = document.createElement("div");
       row.className = "msg-row" + (added ? " active" : "");
-      row.title = added ? "Quitar de Gráficas" : "Agregar a Gráficas";
+      row.title = added ? "Remove from Graphs" : "Add to Graphs";
       const swatch = `<span class="status-dot" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
       row.innerHTML = `
         ${swatch}
         <span class="body">
           <div class="name">${escapeHtml(e.signalName)}</div>
-          <div class="sub"><span>${escapeHtml(e.msgName)}</span><span>·</span><span>Can ${e.channel}</span></div>
+          <div class="sub"><span>${escapeHtml(e.msgName)}</span><span>·</span><span>Ch ${e.channel}</span></div>
         </span>
-        <span class="count">${e.transitions.toLocaleString("es-AR")}</span>
+        <span class="count">${e.transitions.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.transitions / maxT) * 100)}%"></span>`;
       row.onclick = () => toggleSignalInChart(e.channel, e.id, e.signalName, { switchTab: true });
       wrap.appendChild(row);
@@ -1129,10 +1131,10 @@
     const pct = uniq ? Math.round((decoded / uniq) * 100) : 0;
     const chip = (val, label) => `<div class="stat-chip"><b>${val}</b><span>${label}</span></div>`;
     strip.innerHTML =
-      chip(n.toLocaleString("es-AR"), "mensajes") +
-      chip(dur.toFixed(1) + "s", "duración") +
-      chip(uniq, "IDs únicos") +
-      chip(pct + "%", "decodificado");
+      chip(n.toLocaleString("en-US"), "messages") +
+      chip(dur.toFixed(1) + "s", "duration") +
+      chip(uniq, "unique IDs") +
+      chip(pct + "%", "decoded");
   }
 
   function renderMessageList() {
@@ -1152,9 +1154,9 @@
         <span class="status-dot ${e.name ? "ok" : "unknown"}"></span>
         <span class="body">
           <div class="name">${escapeHtml(e.name || hexId)}</div>
-          <div class="sub"><span>${hexId}</span><span>·</span><span>Can ${e.channel}</span>${e.sender ? `<span>·</span><span>${escapeHtml(e.sender)}</span>` : ""}</div>
+          <div class="sub"><span>${hexId}</span><span>·</span><span>Ch ${e.channel}</span>${e.sender ? `<span>·</span><span>${escapeHtml(e.sender)}</span>` : ""}</div>
         </span>
-        <span class="count">${e.count.toLocaleString("es-AR")}</span>
+        <span class="count">${e.count.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.count / maxCount) * 100)}%"></span>`;
       if (inCharts) {
         row.onclick = () => { toggleMsgExpand(e.key); };
@@ -1178,7 +1180,7 @@
     const dbc = findDbcForId(e.id);
     const msg = dbc && dbc.messages.get(e.id);
     if (!msg || msg.signals.length === 0) {
-      list.innerHTML = '<div class="sig-pick-row"><span class="spname">Sin señales definidas</span></div>';
+      list.innerHTML = '<div class="sig-pick-row"><span class="spname">No signals defined</span></div>';
       return list;
     }
     for (const sig of msg.signals) {
@@ -1186,7 +1188,7 @@
       const added = state.chart.series.has(key);
       const row = document.createElement("div");
       row.className = "sig-pick-row" + (added ? " added" : "");
-      row.title = added ? "Quitar de la gráfica" : "Agregar a la gráfica";
+      row.title = added ? "Remove from chart" : "Add to chart";
       const swatch = `<span class="swatch" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
       row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span>`;
       row.onclick = (ev) => { ev.stopPropagation(); toggleSignalInChart(e.channel, e.id, sig.name, { switchTab: false }); };
@@ -1233,7 +1235,7 @@
   function updateResultCount() {
     const total = state.trace.length;
     const shown = state.filtered === null ? total : state.filtered.length;
-    el("resultCount").textContent = state.filtered === null ? "" : `${shown.toLocaleString("es-AR")} / ${total.toLocaleString("es-AR")}`;
+    el("resultCount").textContent = state.filtered === null ? "" : `${shown.toLocaleString("en-US")} / ${total.toLocaleString("en-US")}`;
     el("emptyHint").style.display = total === 0 ? "flex" : "none";
   }
 
@@ -1316,7 +1318,7 @@
   function renderSignalPanelFor(rowIdx) {
     const panel = el("sigPanel");
     if (rowIdx === null || rowIdx === undefined || !state.trace[rowIdx]) {
-      panel.innerHTML = '<div class="sig-empty">Elegí un mensaje de la traza para ver sus señales decodificadas.</div>';
+      panel.innerHTML = '<div class="sig-empty">Select a trace message to see its decoded signals.</div>';
       return;
     }
     const r = state.trace[rowIdx];
@@ -1326,34 +1328,34 @@
 
     let html = "";
     if (!decoded) {
-      html += `<div class="sig-header"><div class="msgname unknown">${hexId} — sin definir</div>
-        <div class="msgmeta"><span>Canal ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
-        <div class="comment">Este ID no está en el DBC asignado al canal ${r.channel}${dbc ? "" : " (no hay DBC asignado)"}.</div></div>`;
+      html += `<div class="sig-header"><div class="msgname unknown">${hexId} — not defined</div>
+        <div class="msgmeta"><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
+        <div class="comment">This ID isn't recognized by any of the loaded DBC files.</div></div>`;
     } else {
       const msg = decoded.message;
       const truncated = msg.dlc > r.data.length;
       html += `<div class="sig-header">
         <div class="msgname">${escapeHtml(msg.name)}</div>
         <div class="msgmeta">
-          <span>${hexId}</span><span>Canal ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
-          ${msg.sender ? `<span>Emisor: ${escapeHtml(msg.sender)}</span>` : ""}
+          <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
+          ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
         </div>
-        ${truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-paquete</span> <span class="comment" style="display:inline">DBC define ${msg.dlc} bytes; frame capturado trae ${r.data.length} — señales fuera de rango se omiten.</span></div>` : ""}
+        ${truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-packet</span> <span class="comment" style="display:inline">DBC defines ${msg.dlc} bytes; captured frame has ${r.data.length} — out-of-range signals are skipped.</span></div>` : ""}
         ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
       </div>`;
       if (msg.isMultiplexed) {
         const muxSig = msg.signals.find((s) => s.isMultiplexor);
-        html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — mostrando el subconjunto de señales activo</div>`;
+        html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — showing the active signal subset</div>`;
       }
       html += '<div class="raw-bytes">' + Array.from(r.data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
       html += '<div class="sig-table">';
-      if (decoded.signals.length === 0) html += '<div class="sig-empty">Sin señales visibles en este frame.</div>';
+      if (decoded.signals.length === 0) html += '<div class="sig-empty">No signals visible in this frame.</div>';
       for (const sg of decoded.signals) {
         const hasLabel = sg.label !== null;
         const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
         html += `<div class="sig-row">
           <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
-          <div class="sraw">crudo: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
+          <div class="sraw">raw: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
           ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
         </div>`;
       }
@@ -1365,7 +1367,7 @@
   function formatNum(v) {
     if (Math.abs(v) >= 1e12) return v.toExponential(4);
     const r = Math.round(v * 1000) / 1000;
-    return r.toLocaleString("es-AR", { maximumFractionDigits: 3 });
+    return r.toLocaleString("en-US", { maximumFractionDigits: 3 });
   }
 
   /* ---------- playback ---------- */
@@ -1537,7 +1539,7 @@
           <span class="lname">${escapeHtml(s.signalName)}</span>
           <span class="lmeta">${escapeHtml(s.msgName)}${s.comment ? " — " + escapeHtml(s.comment) : ""}</span>
           <span class="lval"></span>
-          <button type="button" title="Quitar">✕</button>
+          <button type="button" title="Remove">✕</button>
         </div>
         <div class="chart-lane-body"></div>`;
       lane.querySelector("button").onclick = () => removeSignalFromChart(key);
@@ -1569,7 +1571,7 @@
     wrap.className = "chart-lane-table";
     const table = document.createElement("table");
     const thead = document.createElement("thead");
-    thead.innerHTML = "<tr><th>Tiempo (s)</th><th>Valor</th></tr>";
+    thead.innerHTML = "<tr><th>Time (s)</th><th>Value</th></tr>";
     const tbody = document.createElement("tbody");
     for (const p of s.points) {
       const tr = document.createElement("tr");
@@ -1628,7 +1630,7 @@
 
     if (pts.length === 0) {
       ctx.fillStyle = inkFaint; ctx.font = "11px 'Segoe UI', sans-serif";
-      ctx.fillText("Sin datos para esta señal", marginL, h / 2);
+      ctx.fillText("No data for this signal", marginL, h / 2);
       return;
     }
     let lo = Math.max(0, lowerBound(pts, t0) - 1);
@@ -1715,14 +1717,14 @@
     panel.innerHTML = "";
     const tEl = document.createElement("div");
     tEl.className = "t";
-    tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + (state.chart.hoverT === null ? " · último valor visible" : "");
+    tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + (state.chart.hoverT === null ? " · last visible value" : "");
     panel.appendChild(tEl);
     for (const key of state.chart.order) {
       const s = state.chart.series.get(key);
       const vp = valueAtTime(s.points, t);
       const row = document.createElement("div");
       row.className = "chart-readout-row";
-      row.title = "Ir a esta gráfica";
+      row.title = "Go to this chart";
       row.onclick = () => scrollToLane(key);
       const top = document.createElement("div"); top.className = "top";
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
@@ -1741,7 +1743,7 @@
       row.appendChild(top);
       if (vp) {
         const meta = document.createElement("div"); meta.className = "rmeta";
-        meta.textContent = "último mensaje: t = " + (vp.t - state.t0).toFixed(4) + "s";
+        meta.textContent = "last message: t = " + (vp.t - state.t0).toFixed(4) + "s";
         row.appendChild(meta);
       }
       if (s.comment) {
@@ -1878,7 +1880,7 @@
     box.innerHTML = "";
     if (matches.length === 0) {
       const d = document.createElement("div"); d.className = "opt";
-      const m = document.createElement("span"); m.className = "m"; m.textContent = "Sin resultados";
+      const m = document.createElement("span"); m.className = "m"; m.textContent = "No results";
       d.appendChild(m); box.appendChild(d);
     } else {
       for (const c of matches) {
@@ -1886,7 +1888,7 @@
         const opt = document.createElement("div"); opt.className = "opt";
         const n = document.createElement("span"); n.className = "n"; n.textContent = c.signalName;
         const m = document.createElement("span"); m.className = "m";
-        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (state.chart.series.has(key) ? " · ya agregada" : "");
+        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (state.chart.series.has(key) ? " · already added" : "");
         opt.appendChild(n); opt.appendChild(m);
         opt.onclick = () => { addSignalToChart(c.channel, c.id, c.signalName); input.value = ""; box.classList.remove("open"); box.innerHTML = ""; };
         box.appendChild(opt);
