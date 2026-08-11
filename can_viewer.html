@@ -377,8 +377,10 @@
     font-size: 10px; color: var(--ink-faint); padding-left: 17px; font-variant-numeric: tabular-nums;
     font-family: "Cascadia Code", Consolas, monospace;
   }
-  .chart-readout-row { cursor: pointer; border-radius: 6px; }
+  .chart-readout-row { cursor: grab; border-radius: 6px; touch-action: none; }
   .chart-readout-row:hover { background: var(--surface-2); }
+  .chart-readout-row.dragging { opacity: .45; cursor: grabbing; }
+  .chart-readout-dropline { height: 2px; margin: 2px 4px; border-radius: 1px; background: var(--accent); }
   .chart-lane.flash { animation: flashLane 900ms ease-out; }
   @keyframes flashLane { 0% { background: var(--accent-soft-2); } 100% { background: transparent; } }
 </style>
@@ -1707,7 +1709,71 @@
     ctx.textAlign = "left";
   }
 
+  /* ---- drag-reorder de las filas del readout ---- */
+  let rowDrag = null;      // {key, pointerId, moved}
+  let dropLineEl = null;
+
+  function readoutRowsExcluding(key) {
+    return [...el("chartReadout").querySelectorAll(".chart-readout-row")].filter((r) => r.dataset.key !== key);
+  }
+  function dropIndexAt(rows, clientY) {
+    for (let i = 0; i < rows.length; i++) {
+      if (clientY < rows[i].getBoundingClientRect().top + rows[i].getBoundingClientRect().height / 2) return i;
+    }
+    return rows.length;
+  }
+  function showDropIndicator(clientY, draggedKey) {
+    const panel = el("chartReadout");
+    if (!dropLineEl) { dropLineEl = document.createElement("div"); dropLineEl.className = "chart-readout-dropline"; }
+    const rows = readoutRowsExcluding(draggedKey);
+    const idx = dropIndexAt(rows, clientY);
+    if (idx < rows.length) panel.insertBefore(dropLineEl, rows[idx]);
+    else panel.appendChild(dropLineEl);
+  }
+  function removeDropIndicator() {
+    if (dropLineEl && dropLineEl.parentNode) dropLineEl.parentNode.removeChild(dropLineEl);
+  }
+  function applyRowReorder(clientY, draggedKey) {
+    const rows = readoutRowsExcluding(draggedKey);
+    const idx = dropIndexAt(rows, clientY);
+    const others = state.chart.order.filter((k) => k !== draggedKey);
+    others.splice(idx, 0, draggedKey);
+    state.chart.order = others;
+    renderChartStack();
+  }
+  function startRowDrag(e, row, key) {
+    if (e.button !== 0 || state.chart.order.length < 2) return;
+    row.setPointerCapture(e.pointerId);
+    rowDrag = { key, pointerId: e.pointerId, startClientY: e.clientY, moved: false };
+    const move = (ev) => {
+      if (!rowDrag || ev.pointerId !== rowDrag.pointerId) return;
+      if (!rowDrag.moved) {
+        if (Math.abs(ev.clientY - rowDrag.startClientY) < 4) return;
+        rowDrag.moved = true;
+        row.classList.add("dragging");
+      }
+      showDropIndicator(ev.clientY, key);
+    };
+    const finish = (ev) => {
+      if (!rowDrag || ev.pointerId !== rowDrag.pointerId) return;
+      row.removeEventListener("pointermove", move);
+      row.removeEventListener("pointerup", finish);
+      row.removeEventListener("pointercancel", finish);
+      try { row.releasePointerCapture(ev.pointerId); } catch (err) {}
+      row.classList.remove("dragging");
+      removeDropIndicator();
+      const wasMoved = rowDrag.moved;
+      rowDrag = null;
+      if (wasMoved) applyRowReorder(ev.clientY, key);
+      else scrollToLane(key);
+    };
+    row.addEventListener("pointermove", move);
+    row.addEventListener("pointerup", finish);
+    row.addEventListener("pointercancel", finish);
+  }
+
   function updateReadout() {
+    if (rowDrag) return; // no reconstruir las filas mientras se arrastra una: perdería el pointer capture
     const panel = el("chartReadout");
     if (state.chart.order.length === 0) {
       panel.innerHTML = '<div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>';
@@ -1724,8 +1790,9 @@
       const vp = valueAtTime(s.points, t);
       const row = document.createElement("div");
       row.className = "chart-readout-row";
-      row.title = "Go to this chart";
-      row.onclick = () => scrollToLane(key);
+      row.title = "Drag to reorder · click to jump to chart";
+      row.dataset.key = key;
+      row.addEventListener("pointerdown", (e) => startRowDrag(e, row, key));
       const top = document.createElement("div"); top.className = "top";
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
       const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
