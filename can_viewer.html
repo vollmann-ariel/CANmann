@@ -354,6 +354,24 @@
     flex: 0 0 auto; background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 13px;
   }
   .chart-lane-head button:hover { color: var(--critical); background: var(--surface-2); }
+
+  .chart-lane-trigger { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; min-height: 20px; margin: 0 0 4px; }
+  .chart-lane-trigger .trig-add { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 10.5px; padding: 2px 4px; border-radius: 4px; }
+  .chart-lane-trigger .trig-add:hover { color: var(--accent); background: var(--surface-2); }
+  .chart-lane-trigger select, .chart-lane-trigger input[type="number"] {
+    padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font-size: 11px;
+  }
+  .chart-lane-trigger input[type="number"] { width: 84px; }
+  .chart-lane-trigger .trig-btn { background: none; border: 1px solid var(--border); color: var(--ink-dim); cursor: pointer; padding: 3px 7px; border-radius: 5px; font-size: 10.5px; }
+  .chart-lane-trigger .trig-btn:hover { background: var(--surface-2); }
+  .chart-lane-trigger .trig-btn.primary { border-color: var(--accent); color: var(--accent); }
+  .chart-lane-trigger .trig-btn:disabled { opacity: .4; cursor: default; }
+  .chart-lane-trigger .trig-chip { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--critical); }
+  .chart-lane-trigger .trig-chip .tri { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--critical); }
+  .chart-lane-trigger .trig-step { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; font-family: "Cascadia Code", Consolas, monospace; color: var(--ink-faint); }
+  .chart-lane-trigger .trig-step button { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-size: 12px; padding: 0 3px; }
+  .chart-lane-trigger .trig-step button:disabled { color: var(--ink-faint); opacity: .4; cursor: default; }
+  .chart-lane-trigger .trig-clear:hover { color: var(--critical); }
   .chart-lane canvas { display: block; width: 100%; height: 92px; cursor: crosshair; }
   .chart-lane-table { max-height: 260px; overflow-y: auto; }
   .chart-lane-table table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -1428,6 +1446,7 @@
     return {
       channel, id, signalName, msgName: msg ? msg.name : "0x" + id.toString(16),
       unit: sigDef ? sigDef.unit : "", comment: sigDef ? sigDef.comment : null, points, el: null,
+      sigDef, trigger: null, triggerEvents: [], triggerEventIdx: -1, triggerUIMode: "collapsed",
     };
   }
 
@@ -1519,6 +1538,124 @@
     return points[lo];
   }
 
+  /* ---- triggers: marcar cada ocurrencia de una condición sobre una señal graficada ---- */
+  function isEnumSignal(sigDef) {
+    if (!sigDef.valueTable || sigDef.valueTable.size === 0) return false;
+    // Solo cuenta como enum si TODOS sus estados caen dentro del rango declarado [min,max].
+    // Señales como EngSpd son numéricas continuas pero además traen códigos VAL_ fuera de
+    // rango (65024=Error, 65535=N/A, convención J1939) — esos no la vuelven un enum real.
+    for (const raw of sigDef.valueTable.keys()) {
+      const v = raw * sigDef.factor + sigDef.offset;
+      if (v < sigDef.min || v > sigDef.max) return false;
+    }
+    return true;
+  }
+  function triggerMatches(trigger, p) {
+    if (trigger.kind === "numeric") return trigger.op === "<" ? p.value < trigger.threshold : p.value > trigger.threshold;
+    return p.raw === trigger.raw;
+  }
+  function computeTriggerEvents(s) {
+    const events = [];
+    let prevMatched = false;
+    for (const p of s.points) {
+      const matched = triggerMatches(s.trigger, p);
+      if (matched && !prevMatched) events.push(p); // flanco: solo la entrada a la condición, no cada muestra sostenida
+      prevMatched = matched;
+    }
+    s.triggerEvents = events;
+    s.triggerEventIdx = -1;
+  }
+  function focusRangeOnTime(t) {
+    const { range } = state.chart;
+    if (range && t >= range.t0 && t <= range.t1) return; // ya visible, no pisar el zoom/pan actual del usuario
+    const span = range ? range.t1 - range.t0 : 0;
+    setRangeClamped(t - span / 2, t + span / 2);
+  }
+  function stepTriggerEvent(s, dir) {
+    if (s.triggerEvents.length === 0) return;
+    const maxIdx = s.triggerEvents.length - 1;
+    s.triggerEventIdx = dir > 0 ? Math.min(s.triggerEventIdx + 1, maxIdx) : Math.max(s.triggerEventIdx - 1, 0);
+    const event = s.triggerEvents[s.triggerEventIdx];
+    state.chart.hoverT = event.t;
+    focusRangeOnTime(event.t);
+    requestRedraw();
+    renderTriggerRow(s);
+  }
+  function triggerSummaryText(s) {
+    const t = s.trigger;
+    if (t.kind === "enum") return (s.sigDef.valueTable && s.sigDef.valueTable.get(t.raw)) || String(t.raw);
+    return t.op + " " + formatNum(t.threshold) + (s.unit ? " " + s.unit : "");
+  }
+  function renderTriggerRow(s) {
+    const row = s.el && s.el.triggerRow;
+    if (!row) return;
+    if (!s.sigDef) { row.innerHTML = ""; return; } // sin definición DBC resuelta, no hay tipo/valores para armar un trigger
+    const isEnum = isEnumSignal(s.sigDef);
+    if (s.triggerUIMode === "collapsed") {
+      row.innerHTML = `<button type="button" class="trig-add">+ Trigger</button>`;
+      row.querySelector(".trig-add").onclick = () => { s.triggerUIMode = "editing"; renderTriggerRow(s); };
+      return;
+    }
+    if (s.triggerUIMode === "editing") {
+      if (isEnum) {
+        const opts = [...s.sigDef.valueTable.entries()]
+          .map(([raw, label]) => `<option value="${raw}"${s.trigger && s.trigger.raw === raw ? " selected" : ""}>${escapeHtml(label)}</option>`)
+          .join("");
+        row.innerHTML = `<select class="trig-val">${opts}</select>
+          <button type="button" class="trig-btn primary trig-apply">Apply</button>
+          <button type="button" class="trig-btn trig-cancel">Cancel</button>`;
+        row.querySelector(".trig-apply").onclick = () => {
+          s.trigger = { kind: "enum", raw: parseInt(row.querySelector(".trig-val").value, 10) };
+          computeTriggerEvents(s);
+          s.triggerUIMode = "active";
+          renderTriggerRow(s);
+          requestRedraw();
+        };
+      } else {
+        const op = s.trigger && s.trigger.kind === "numeric" ? s.trigger.op : "<";
+        const val = s.trigger && s.trigger.kind === "numeric" ? s.trigger.threshold : "";
+        row.innerHTML = `<select class="trig-op">
+            <option value="<"${op === "<" ? " selected" : ""}>below</option>
+            <option value=">"${op === ">" ? " selected" : ""}>above</option>
+          </select>
+          <input type="number" class="trig-val" step="any" required value="${val}" placeholder="${escapeHtml(s.sigDef.unit || "value")}" />
+          <button type="button" class="trig-btn primary trig-apply">Apply</button>
+          <button type="button" class="trig-btn trig-cancel">Cancel</button>`;
+        row.querySelector(".trig-apply").onclick = () => {
+          const valInput = row.querySelector(".trig-val");
+          if (!valInput.reportValidity()) return; // input vacío/no numérico: el navegador ya le muestra el motivo al usuario
+          s.trigger = { kind: "numeric", op: row.querySelector(".trig-op").value, threshold: parseFloat(valInput.value) };
+          computeTriggerEvents(s);
+          s.triggerUIMode = "active";
+          renderTriggerRow(s);
+          requestRedraw();
+        };
+      }
+      row.querySelector(".trig-cancel").onclick = () => { s.triggerUIMode = s.trigger ? "active" : "collapsed"; renderTriggerRow(s); };
+      return;
+    }
+    // active
+    const n = s.triggerEvents.length;
+    const posText = s.triggerEventIdx < 0 ? "–" : String(s.triggerEventIdx + 1);
+    row.innerHTML = `
+      <span class="trig-chip"><span class="tri"></span>${escapeHtml(triggerSummaryText(s))}</span>
+      <span class="trig-step">
+        <button type="button" class="trig-prev" ${s.triggerEventIdx <= 0 ? "disabled" : ""}>◀</button>
+        ${posText}/${n}
+        <button type="button" class="trig-next" ${s.triggerEventIdx >= n - 1 ? "disabled" : ""}>▶</button>
+      </span>
+      <button type="button" class="trig-btn trig-edit">Edit</button>
+      <button type="button" class="trig-btn trig-clear">Clear</button>`;
+    row.querySelector(".trig-prev").onclick = () => stepTriggerEvent(s, -1);
+    row.querySelector(".trig-next").onclick = () => stepTriggerEvent(s, 1);
+    row.querySelector(".trig-edit").onclick = () => { s.triggerUIMode = "editing"; renderTriggerRow(s); };
+    row.querySelector(".trig-clear").onclick = () => {
+      s.trigger = null; s.triggerEvents = []; s.triggerEventIdx = -1; s.triggerUIMode = "collapsed";
+      renderTriggerRow(s);
+      requestRedraw();
+    };
+  }
+
   /* ---- DOM de los carriles ---- */
   function renderChartStack() {
     const stack = el("chartStack");
@@ -1543,9 +1680,14 @@
           <span class="lval"></span>
           <button type="button" title="Remove">✕</button>
         </div>
+        <div class="chart-lane-trigger"></div>
         <div class="chart-lane-body"></div>`;
       lane.querySelector("button").onclick = () => removeSignalFromChart(key);
-      s.el = { lane, lval: lane.querySelector(".lval"), body: lane.querySelector(".chart-lane-body"), canvas: null, ctx: null };
+      s.el = {
+        lane, lval: lane.querySelector(".lval"), body: lane.querySelector(".chart-lane-body"),
+        triggerRow: lane.querySelector(".chart-lane-trigger"), canvas: null, ctx: null,
+      };
+      renderTriggerRow(s);
       stack.appendChild(lane);
     }
     buildLaneVisuals();
@@ -1627,7 +1769,7 @@
 
     const { t0, t1 } = state.chart.range;
     const pts = s.points;
-    const marginL = 4, marginR = 4, marginT = 6, marginB = 4;
+    const marginL = 4, marginR = 4, marginT = s.trigger ? 10 : 6, marginB = 4;
     const plotW = w - marginL - marginR, plotH = h - marginT - marginB;
 
     if (pts.length === 0) {
@@ -1670,6 +1812,18 @@
       }
       if (lastX !== null && hi === pts.length - 1) ctx.lineTo(marginL + plotW, lastY);
       ctx.stroke();
+    }
+
+    if (s.trigger && s.triggerEvents.length) {
+      const elo = Math.max(0, lowerBound(s.triggerEvents, t0));
+      const ehi = Math.min(s.triggerEvents.length - 1, upperBoundIdx(s.triggerEvents, t1));
+      ctx.fillStyle = styles.getPropertyValue("--critical").trim();
+      for (let i = elo; i <= ehi; i++) {
+        const ex = xOf(s.triggerEvents[i].t);
+        ctx.beginPath();
+        ctx.moveTo(ex - 4, marginT - 8); ctx.lineTo(ex + 4, marginT - 8); ctx.lineTo(ex, marginT - 2);
+        ctx.closePath(); ctx.fill();
+      }
     }
 
     if (state.chart.hoverT !== null && state.chart.hoverT >= t0 && state.chart.hoverT <= t1) {
@@ -1895,7 +2049,7 @@
     });
     stack.addEventListener("pointerdown", (e) => {
       if (state.chart.tableView || !state.chart.range) return;
-      if (e.target.closest("button")) return; // dejar que el botón (✕ quitar) reciba su propio click, sin iniciar un arrastre
+      if (e.target.closest("button, .chart-lane-trigger")) return; // dejar que el botón (✕ quitar) o los controles del trigger reciban su propia interacción, sin iniciar un arrastre
       stack.setPointerCapture(e.pointerId);
       state.chart.drag = {
         startClientX: e.clientX, startClientY: e.clientY,
