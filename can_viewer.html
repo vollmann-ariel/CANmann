@@ -123,6 +123,19 @@
   .iconbtn.layout-toggle-btn:hover { background: var(--accent-soft-2); }
   .iconbtn.layout-toggle-btn.collapsed { color: var(--ink-faint); border-color: var(--border); background: var(--surface-2); }
   .iconbtn.layout-toggle-btn.collapsed:hover { color: var(--ink); border-color: var(--accent); }
+  .about-wrap { position: relative; }
+  .about-toggle { font-size: 11px; color: var(--ink-faint); cursor: pointer; user-select: none; opacity: .55; transition: opacity .15s; }
+  .about-toggle:hover { opacity: 1; color: var(--ink-dim); }
+  .about-card {
+    display: none; position: absolute; top: calc(100% + 10px); right: 0; z-index: 30;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; box-shadow: var(--shadow); font-size: 11.5px; line-height: 1.7;
+    color: var(--ink-dim); white-space: nowrap; text-align: right;
+  }
+  .about-card.open { display: block; }
+  .about-card .about-name { font-weight: 700; color: var(--ink); }
+  .about-card a { color: inherit; opacity: .8; }
+  .about-card a:hover { color: var(--accent); opacity: 1; }
   .stat-chip {
     display: flex; flex-direction: column; align-items: flex-end;
     padding: 4px 10px; border-radius: 6px; background: var(--surface-2);
@@ -419,8 +432,8 @@
       </div>
     </div>
     <nav class="tabbar">
-      <button type="button" class="tab-btn active" id="tabTrazaBtn">Trace</button>
-      <button type="button" class="tab-btn" id="tabGraficasBtn">Graphs</button>
+      <button type="button" class="tab-btn" id="tabTrazaBtn">Trace</button>
+      <button type="button" class="tab-btn active" id="tabGraficasBtn">Graphs</button>
       <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC</button>
     </nav>
     <div class="stats-strip" id="statsStrip"></div>
@@ -443,6 +456,15 @@
           <rect x="16" y="5" width="5" height="14" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
         </svg>
       </button>
+    </div>
+    <div class="about-wrap">
+      <span class="about-toggle" id="aboutToggle" title="About">about</span>
+      <div class="about-card" id="aboutCard">
+        <div class="about-name">CANmann v1.0</div>
+        <div>VOLLMANN, Ariel R.</div>
+        <div>CNH ARGENTINA · COR Plant</div>
+        <a href="mailto:ariel.vollmann@cnh.com">ariel.vollmann@cnh.com</a>
+      </div>
     </div>
   </header>
 
@@ -496,7 +518,7 @@
       </section>
     </aside>
 
-    <main class="trace-pane tab-traza">
+    <main class="trace-pane tab-traza tab-hidden">
       <div class="toolbar">
         <div class="search-box">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -541,13 +563,13 @@
       </div>
     </main>
 
-    <aside class="rail rail-right tab-traza">
+    <aside class="rail rail-right tab-traza tab-hidden">
       <div class="sig-panel" id="sigPanel">
         <div class="sig-empty">Select a trace message to see its decoded signals.</div>
       </div>
     </aside>
 
-    <main class="chart-pane tab-graficas tab-hidden" id="chartPane">
+    <main class="chart-pane tab-graficas" id="chartPane">
       <div class="chart-toolbar">
         <div class="chart-add-box">
           <input id="chartAddInput" placeholder="Add signal: name, message, or ID…" autocomplete="off" />
@@ -569,7 +591,7 @@
       </div>
     </main>
 
-    <aside class="rail rail-right tab-graficas tab-hidden" id="chartReadoutRail">
+    <aside class="rail rail-right tab-graficas" id="chartReadoutRail">
       <div class="chart-readout" id="chartReadout">
         <div class="hint">Hover over a chart to see each signal's value at that instant.</div>
       </div>
@@ -806,7 +828,7 @@
     selectedMessageKey: null,
     playing: false,
     playTimer: null,
-    tab: "traza",
+    tab: "graficas",
     varStats: null, // Map "chan:id:signal" -> {channel,id,signalName,msgName,unit,transitions,count} | null = sin calcular / desactualizado
     chart: {
       series: new Map(),   // key "chan:id:signal" -> {channel,id,signalName,msgName,unit,comment,colorVar,points:[{t,raw,value,label}]}
@@ -2155,6 +2177,12 @@
     document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
     document.querySelectorAll(".tab-dbcdefs").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcdefs"));
     renderMessageList();
+    if (tab === "traza") {
+      // el viewport puede haber quedado oculto (clientHeight 0) mientras se filtraba/seleccionaba en otra pestaña:
+      // reencuadrar la fila seleccionada ahora que el alto real es correcto, antes de recalcular las filas visibles
+      if (state.selectedRow !== null) scrollRowIntoView(state.selectedRow);
+      renderVisibleRows();
+    }
     if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) requestRedraw(); }
     if (tab === "dbcdefs") renderDbcDefsFileSel();
   }
@@ -2229,6 +2257,9 @@
   wireLayoutToggle("toggleRailLeftBtn", ".rail-left");
   wireLayoutToggle("toggleToolbarBtn", ".toolbar, .chart-toolbar");
   wireLayoutToggle("toggleRailRightBtn", ".rail-right");
+
+  el("aboutToggle").addEventListener("click", (e) => { e.stopPropagation(); el("aboutCard").classList.toggle("open"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".about-wrap")) el("aboutCard").classList.remove("open"); });
 
   updateResultCount();
   loadStoredDbcs();
