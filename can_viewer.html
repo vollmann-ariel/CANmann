@@ -118,6 +118,11 @@
   .wave { display: block; }
 
   .stats-strip { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .layout-toggles { display: flex; gap: 4px; }
+  .iconbtn.layout-toggle-btn { width: 35px; height: 35px; color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+  .iconbtn.layout-toggle-btn:hover { background: var(--accent-soft-2); }
+  .iconbtn.layout-toggle-btn.collapsed { color: var(--ink-faint); border-color: var(--border); background: var(--surface-2); }
+  .iconbtn.layout-toggle-btn.collapsed:hover { color: var(--ink); border-color: var(--accent); }
   .stat-chip {
     display: flex; flex-direction: column; align-items: flex-end;
     padding: 4px 10px; border-radius: 6px; background: var(--surface-2);
@@ -132,6 +137,7 @@
   .rail { flex: 0 0 auto; background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
   .rail-left { width: 300px; border-right: 1px solid var(--border); }
   .rail-right { width: 340px; border-left: 1px solid var(--border); }
+  .rail-left.collapsed, .rail-right.collapsed, .toolbar.collapsed, .chart-toolbar.collapsed { display: none; }
   .trace-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
 
   section.block { border-bottom: 1px solid var(--border); padding: 12px 14px; }
@@ -418,6 +424,26 @@
       <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC</button>
     </nav>
     <div class="stats-strip" id="statsStrip"></div>
+    <div class="layout-toggles" role="group" aria-label="Toggle panels">
+      <button type="button" class="iconbtn layout-toggle-btn" id="toggleRailLeftBtn" title="Toggle left panel" aria-label="Toggle left panel" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2.5"/>
+          <rect x="3" y="5" width="5" height="14" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
+        </svg>
+      </button>
+      <button type="button" class="iconbtn layout-toggle-btn" id="toggleToolbarBtn" title="Toggle toolbar" aria-label="Toggle toolbar" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2.5"/>
+          <rect x="3" y="5" width="18" height="4" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
+        </svg>
+      </button>
+      <button type="button" class="iconbtn layout-toggle-btn" id="toggleRailRightBtn" title="Toggle right panel" aria-label="Toggle right panel" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2.5"/>
+          <rect x="16" y="5" width="5" height="14" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
+        </svg>
+      </button>
+    </div>
   </header>
 
   <div class="workspace" id="workspace">
@@ -2136,6 +2162,17 @@
   /* ---------- misc UI wiring ---------- */
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
+  function wireLayoutToggle(btnId, selector) {
+    const btn = el(btnId);
+    btn.addEventListener("click", () => {
+      const collapsed = !btn.classList.contains("collapsed");
+      btn.classList.toggle("collapsed", collapsed);
+      btn.setAttribute("aria-pressed", String(!collapsed));
+      document.querySelectorAll(selector).forEach((n) => n.classList.toggle("collapsed", collapsed));
+      if (state.tab === "graficas") requestRedraw();
+    });
+  }
+
   function wireDrop(zoneId, inputId, onFiles) {
     const zone = el(zoneId), input = el(inputId);
     zone.addEventListener("click", (e) => { if (e.target !== input) input.click(); });
@@ -2188,6 +2225,10 @@
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
   window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
   wireChartInteraction();
+
+  wireLayoutToggle("toggleRailLeftBtn", ".rail-left");
+  wireLayoutToggle("toggleToolbarBtn", ".toolbar, .chart-toolbar");
+  wireLayoutToggle("toggleRailRightBtn", ".rail-right");
 
   updateResultCount();
   loadStoredDbcs();
