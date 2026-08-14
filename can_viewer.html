@@ -147,7 +147,7 @@
 
   /* ---------- Layout ---------- */
   .workspace { flex: 1 1 auto; display: flex; min-height: 0; }
-  .rail { flex: 0 0 auto; background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+  .rail { flex: 0 0 auto; background: var(--surface); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .rail-left { width: 300px; border-right: 1px solid var(--border); }
   .rail-right { width: 340px; border-left: 1px solid var(--border); }
   .rail-left.collapsed, .rail-right.collapsed, .toolbar.collapsed, .chart-toolbar.collapsed { display: none; }
@@ -164,8 +164,12 @@
   .block h2 .chev { flex: 0 0 auto; transition: transform .15s; opacity: .7; }
   .block.collapsed h2 { margin-bottom: 0; }
   .block.collapsed h2 .chev { transform: rotate(-90deg); }
-  .block.collapsed .block-body { display: none !important; }
-  .block.collapsed.rail-flex { flex: 0 0 auto !important; }
+  .block-body { overflow: hidden; transition: max-height .2s ease, opacity .15s ease; opacity: 1; }
+  .block.collapsed .block-body { max-height: 0; opacity: 0; }
+  /* block-body clips overflow for the collapse animation, so focus rings on its children must stay inside their own box instead of bleeding outward. */
+  .block-body :focus-visible { outline-offset: -2px; }
+  .block.rail-flex { transition: flex-grow .2s ease; }
+  .block.collapsed.rail-flex { flex: 0 0 0 !important; }
 
   /* ---------- Drop zones ---------- */
   .dropzone {
@@ -189,7 +193,10 @@
   .file-pill button { background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
   .file-pill button:hover { color: var(--critical); background: var(--surface-3); }
 
-  #chanMap select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; }
+  #chanMap { display: flex; flex-direction: column; gap: 8px; }
+  #chanMap .chanmap-row { display: flex; align-items: center; gap: 8px; }
+  #chanMap .chanmap-label { flex: 0 0 auto; width: 42px; font-size: 11px; font-weight: 700; color: var(--ink-dim); }
+  #chanMap select { flex: 1 1 auto; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; }
 
   /* ---------- Message list ---------- */
   .msg-search {
@@ -331,6 +338,8 @@
   .sig-pick-row .spunit { color: var(--ink-faint); font-size: 9.5px; }
   .sig-pick-row.added .spname { color: var(--ink); font-weight: 600; }
   .sig-pick-row .swatch { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .sig-pick-row.match { background: var(--accent-soft); }
+  .sig-pick-row.match .spname { color: var(--accent); font-weight: 600; }
 
   /* ---------- DBC definitions browser ---------- */
   .dbcdefs-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
@@ -470,7 +479,7 @@
 
   <div class="workspace" id="workspace">
     <aside class="rail rail-left">
-      <section class="block" data-block="dbc">
+      <section class="block collapsed" data-block="dbc">
         <h2><span>1 · DBC Files</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <label class="dropzone" id="dbcDrop">
@@ -482,7 +491,7 @@
         </div>
       </section>
 
-      <section class="block" data-block="log">
+      <section class="block collapsed" data-block="log">
         <h2><span>2 · CAN Log</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <label class="dropzone" id="logDrop">
@@ -494,14 +503,14 @@
         </div>
       </section>
 
-      <section class="block" id="chanMapBlock" data-block="chanmap" style="display:none">
-        <h2><span>3 · Preferred DBC</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
+      <section class="block collapsed" id="chanMapBlock" data-block="chanmap">
+        <h2><span>3 · Bus → DBC Assignment</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
           <div id="chanMap"></div>
         </div>
       </section>
 
-      <section class="block rail-flex" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
+      <section class="block rail-flex collapsed" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
         <h2><span>Messages Seen</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
           <input class="msg-search" id="msgSearch" placeholder="Search by ID or name…" />
@@ -694,15 +703,39 @@
     if (byteIdx >= data.length) return 0;
     return (data[byteIdx] >> (globalBit & 7)) & 1;
   }
+  // Bit walking for Motorola/big-endian signals: DBC's startBit uses the same
+  // per-byte LSB=0 physical numbering as getBit (NOT an MSB-flipped numbering,
+  // despite appearances) — the signal is read MSB-first, decrementing within a
+  // byte, jumping +15 at each byte boundary. Verified against cantools for
+  // single-byte, multi-byte-spanning, 64-bit, and mid-byte-aligned signals.
+  function motoStep(pos) { return (pos & 7) === 0 ? pos + 15 : pos - 1; }
+
   function signalMaxBit(sig) {
-    if (sig.byteOrder === "intel") return sig.startBit + sig.length - 1;
-    const byteIndex = sig.startBit >> 3, bitInByte = sig.startBit & 7;
-    return byteIndex * 8 + (7 - bitInByte);
+    if (sig._maxBit !== undefined) return sig._maxBit;
+    let maxPos;
+    if (sig.byteOrder === "intel") maxPos = sig.startBit + sig.length - 1;
+    else {
+      let pos = sig.startBit; maxPos = pos;
+      for (let i = 1; i < sig.length; i++) { pos = motoStep(pos); if (pos > maxPos) maxPos = pos; }
+    }
+    sig._maxBit = maxPos;
+    return maxPos;
+  }
+  function signalMinBit(sig) {
+    if (sig._minBit !== undefined) return sig._minBit;
+    let minPos;
+    if (sig.byteOrder === "intel") minPos = sig.startBit;
+    else {
+      let pos = sig.startBit; minPos = pos;
+      for (let i = 1; i < sig.length; i++) { pos = motoStep(pos); if (pos < minPos) minPos = pos; }
+    }
+    sig._minBit = minPos;
+    return minPos;
   }
   function signalFitsData(sig, data) { return signalMaxBit(sig) < data.length * 8; }
   function formatBitSpec(sig) {
     const hi = signalMaxBit(sig);
-    const lo = hi - sig.length + 1;
+    const lo = signalMinBit(sig);
     const order = sig.byteOrder === "intel" ? "Intel" : "Motorola";
     const sign = sig.signed ? "signed" : "unsigned";
     return `bits ${lo}-${hi} (${sig.length} bit${sig.length === 1 ? "" : "s"}, ${order}, ${sign})`;
@@ -713,11 +746,10 @@
     if (sig.byteOrder === "intel") {
       for (let i = 0; i < sig.length; i++) if (getBit(data, sig.startBit + i)) value |= 1n << BigInt(i);
     } else {
-      const byteIndex = sig.startBit >> 3, bitInByte = sig.startBit & 7;
-      const msbGlobal = byteIndex * 8 + (7 - bitInByte);
+      let pos = sig.startBit;
       for (let i = 0; i < sig.length; i++) {
-        const pos = msbGlobal - i;
         value = (value << 1n) | BigInt(pos >= 0 ? getBit(data, pos) : 0);
+        pos = motoStep(pos);
       }
     }
     if (sig.signed && sig.length > 0) {
@@ -817,9 +849,9 @@
    * App state
    * ========================================================= */
   const state = {
-    dbcs: [],            // { fileName, dbc, msgCount, sigCount }
-    preferredDbcIdx: null, // índice en state.dbcs a probar primero cuando un ID está definido en más de un DBC cargado
-    dbcDefs: { dbcIdx: null, selectedId: null }, // pestaña "DBC": qué archivo se está explorando y qué mensaje está seleccionado
+    dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC subidos, listados como referencia; NO se leen/parsean hasta asignarse a un bus
+    channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
+    dbcDefs: { channel: null, selectedId: null }, // pestaña "DBC": qué bus (DBC asignado) se está explorando y qué mensaje está seleccionado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     filtered: null,       // array of row indices, or null = all
@@ -846,6 +878,40 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
+  /* ---------- collapsible rail blocks ---------- */
+  function setBlockCollapsed(block, collapsed) {
+    if (block.classList.contains("collapsed") === collapsed) return;
+    const body = block.querySelector(".block-body");
+    if (block.classList.contains("rail-flex")) {
+      // sized by the .block.rail-flex flex-grow transition (CSS) — no height to measure
+      block.classList.toggle("collapsed", collapsed);
+      return;
+    }
+    if (collapsed) {
+      body.style.maxHeight = body.scrollHeight + "px"; // pin current height so the shrink can animate from it
+      requestAnimationFrame(() => { body.style.maxHeight = "0px"; });
+    } else {
+      body.style.maxHeight = body.scrollHeight + "px";
+      body.addEventListener("transitionend", function onEnd(e) {
+        if (e.propertyName !== "max-height") return;
+        body.style.maxHeight = "none"; // let it grow/shrink freely once open (content can change while expanded)
+        body.removeEventListener("transitionend", onEnd);
+      });
+    }
+    block.classList.toggle("collapsed", collapsed);
+  }
+
+  // Accordion: only one .block in the left rail may be expanded at a time.
+  function expandOnlyRailBlock(block) {
+    const rail = block.closest(".rail-left");
+    if (rail) {
+      rail.querySelectorAll(".block").forEach((sibling) => {
+        if (sibling !== block) setBlockCollapsed(sibling, true);
+      });
+    }
+    setBlockCollapsed(block, false);
+  }
+
   /* ---------- decorative CAN waveform ---------- */
   (function drawWave() {
     const c = el("waveCanvas"), ctx = c.getContext("2d");
@@ -870,119 +936,166 @@
     ctx.stroke();
   })();
 
-  /* ---------- persistencia de DBCs (IndexedDB) ---------- */
-  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbcs";
+  /* ---------- persistencia de asignaciones bus -> DBC (IndexedDB) ----------
+   * Sólo se persiste el texto de los DBC efectivamente asignados a un bus (los ya leídos
+   * legítimamente). Los archivos subidos pero no asignados quedan sólo en memoria: nunca
+   * se leen, así que no hay nada válido que guardar para ellos entre sesiones. */
+  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
-      const req = indexedDB.open(DBC_DB_NAME, 1);
-      req.onupgradeneeded = () => { req.result.createObjectStore(DBC_STORE_NAME, { keyPath: "fileName" }); };
+      const req = indexedDB.open(DBC_DB_NAME, 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(DBC_STORE_NAME)) db.createObjectStore(DBC_STORE_NAME, { keyPath: "channel" });
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
   }
-  function rememberDbc(fileName, text) {
+  function rememberChannelDbc(channel, fileName, text) {
     openDbcStore().then((db) => {
-      db.transaction(DBC_STORE_NAME, "readwrite").objectStore(DBC_STORE_NAME).put({ fileName, text });
+      db.transaction(DBC_STORE_NAME, "readwrite").objectStore(DBC_STORE_NAME).put({ channel, fileName, text });
     }).catch(() => {});
   }
-  function forgetStoredDbc(fileName) {
+  function forgetChannelDbc(channel) {
     openDbcStore().then((db) => {
-      db.transaction(DBC_STORE_NAME, "readwrite").objectStore(DBC_STORE_NAME).delete(fileName);
+      db.transaction(DBC_STORE_NAME, "readwrite").objectStore(DBC_STORE_NAME).delete(channel);
     }).catch(() => {});
   }
-  function loadStoredDbcs() {
+  function loadStoredChannelDbcs() {
     openDbcStore().then((db) => {
       const req = db.transaction(DBC_STORE_NAME, "readonly").objectStore(DBC_STORE_NAME).getAll();
-      req.onsuccess = () => { for (const entry of req.result) addDbcFile(entry.fileName, entry.text, { skipStore: true }); };
+      req.onsuccess = () => {
+        for (const entry of req.result) {
+          if (!state.dbcFiles.some((d) => d.fileName === entry.fileName)) {
+            state.dbcFiles.push({ fileName: entry.fileName, file: null, cachedText: entry.text });
+          }
+          applyChannelDbc(entry.channel, entry.fileName, entry.text, { skipStore: true });
+        }
+      };
     }).catch(() => {});
   }
 
-  /* ---------- DBC loading ---------- */
+  /* ---------- DBC loading ----------
+   * Subir un archivo sólo lo registra como referencia (state.dbcFiles): nunca se lee ni
+   * se parsea hasta que el usuario lo asigna a un bus en el bloque "chanmap". Sólo el DBC
+   * asignado a un bus decodifica los mensajes de ese bus (ver findDbcForChannelId). */
   function renderDbcList() {
     const list = el("dbcList");
     list.innerHTML = "";
-    state.dbcs.forEach((d, i) => {
+    state.dbcFiles.forEach((d, i) => {
+      const assignedTo = [1, 2, 3].filter((c) => state.channelDbc[c] && state.channelDbc[c].fileName === d.fileName);
+      const meta = assignedTo.length ? assignedTo.map((c) => "CAN" + c).join(", ") : "not assigned";
       const pill = document.createElement("div");
       pill.className = "file-pill";
-      pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${d.msgCount} msgs</span><button title="Remove">✕</button>`;
+      pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${meta}</span><button title="Remove">✕</button>`;
       pill.querySelector("button").onclick = () => {
-        const removed = state.dbcs.splice(i, 1)[0];
-        if (state.preferredDbcIdx !== null) {
-          if (state.preferredDbcIdx === i) state.preferredDbcIdx = null;
-          else if (state.preferredDbcIdx > i) state.preferredDbcIdx -= 1;
-        }
-        if (state.dbcDefs.dbcIdx !== null) {
-          if (state.dbcDefs.dbcIdx === i) { state.dbcDefs.dbcIdx = null; state.dbcDefs.selectedId = null; }
-          else if (state.dbcDefs.dbcIdx > i) state.dbcDefs.dbcIdx -= 1;
-        }
-        renderDbcList();
-        recomputeAll();
-        if (removed) forgetStoredDbc(removed.fileName);
+        state.dbcFiles.splice(i, 1);
+        for (const c of assignedTo) unassignChannel(c); // also re-renders the list
+        if (assignedTo.length === 0) renderDbcList();
       };
       list.appendChild(pill);
     });
-    renderPreferredDbcBlock();
+    renderChanMap();
     renderDbcDefsFileSel();
   }
 
-  function addDbcFile(fileName, text, opts) {
+  function registerDbcFile(file) {
+    if (state.dbcFiles.some((d) => d.fileName === file.name)) return;
+    state.dbcFiles.push({ fileName: file.name, file, cachedText: undefined });
+    renderDbcList();
+  }
+
+  // Lee el texto de un archivo DBC de referencia sólo la primera vez que hace falta (al
+  // asignarlo a un bus); lo cachea para no releerlo si se reasigna a otro bus después.
+  function withDbcText(entry, cb) {
+    if (entry.cachedText !== undefined) { cb(entry.cachedText); return; }
+    const reader = new FileReader();
+    reader.onload = () => { entry.cachedText = reader.result; cb(reader.result); };
+    reader.onerror = () => alert("Couldn't read " + entry.fileName);
+    reader.readAsText(entry.file, "windows-1252");
+  }
+
+  function applyChannelDbc(channel, fileName, text, opts) {
     let dbc;
     try { dbc = parseDBC(text); } catch (e) { alert("Couldn't parse " + fileName + ": " + e.message); return; }
     let sigCount = 0;
     dbc.messages.forEach((m) => (sigCount += m.signals.length));
-    state.dbcs.push({ fileName, dbc, msgCount: dbc.messages.size, sigCount });
+    state.channelDbc[channel] = { fileName, dbc, msgCount: dbc.messages.size, sigCount };
+    if (!opts || !opts.skipStore) rememberChannelDbc(channel, fileName, text);
     renderDbcList();
     recomputeAll();
-    if (!opts || !opts.skipStore) rememberDbc(fileName, text);
   }
 
-  function renderPreferredDbcBlock() {
-    const block = el("chanMapBlock"), wrap = el("chanMap");
-    if (state.dbcs.length === 0) { block.style.display = "none"; return; }
-    block.style.display = "";
+  function assignFileToChannel(channel, fileName) {
+    const entry = state.dbcFiles.find((d) => d.fileName === fileName);
+    if (!entry) return;
+    withDbcText(entry, (text) => applyChannelDbc(channel, fileName, text));
+  }
+
+  function unassignChannel(channel) {
+    state.channelDbc[channel] = null;
+    forgetChannelDbc(channel);
+    if (state.dbcDefs.channel === channel) { state.dbcDefs.channel = null; state.dbcDefs.selectedId = null; }
+    renderDbcList();
+    recomputeAll();
+  }
+
+  function renderChanMap() {
+    const wrap = el("chanMap");
     wrap.innerHTML = "";
-    const sel = document.createElement("select");
-    sel.innerHTML = '<option value="-1">No preference (use the first one that recognizes it)</option>' +
-      state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
-    sel.value = state.preferredDbcIdx !== null ? state.preferredDbcIdx : -1;
-    sel.onchange = () => { state.preferredDbcIdx = sel.value === "-1" ? null : parseInt(sel.value, 10); recomputeAll(); };
-    wrap.appendChild(sel);
-    const hint = document.createElement("div");
-    hint.style.cssText = "margin-top:6px;font-size:10.5px;color:var(--ink-faint)";
-    hint.textContent = "Tried first when the same ID is defined in more than one loaded DBC. If it isn't recognized there, the other loaded DBCs are tried in order.";
-    wrap.appendChild(hint);
+    if (state.dbcFiles.length === 0) {
+      wrap.innerHTML = '<div class="sig-empty">Upload DBC files above, then assign one per bus.</div>';
+      return;
+    }
+    for (const ch of [1, 2, 3]) {
+      const row = document.createElement("div");
+      row.className = "chanmap-row";
+      const label = document.createElement("div");
+      label.className = "chanmap-label";
+      label.textContent = "CAN" + ch;
+      const sel = document.createElement("select");
+      sel.innerHTML = '<option value="">— none —</option>' +
+        state.dbcFiles.map((d) => `<option value="${escapeHtml(d.fileName)}">${escapeHtml(d.fileName)}</option>`).join("");
+      sel.value = state.channelDbc[ch] ? state.channelDbc[ch].fileName : "";
+      sel.onchange = () => {
+        if (sel.value === "") unassignChannel(ch);
+        else assignFileToChannel(ch, sel.value);
+      };
+      row.appendChild(label);
+      row.appendChild(sel);
+      wrap.appendChild(row);
+    }
   }
 
-  function findDbcForId(id) {
-    if (state.preferredDbcIdx !== null && state.dbcs[state.preferredDbcIdx]) {
-      const dbc = state.dbcs[state.preferredDbcIdx].dbc;
-      if (dbc.messages.has(id)) return dbc;
-    }
-    for (const d of state.dbcs) {
-      if (d.dbc.messages.has(id)) return d.dbc;
-    }
-    return null;
+  // Los frames capturados en CSV no llevan columna de canal (siempre 0) — se tratan como CAN1.
+  function normalizeChannel(channel) { return channel === 0 ? 1 : channel; }
+
+  function findDbcForChannelId(channel, id) {
+    const entry = state.channelDbc[normalizeChannel(channel)];
+    return entry && entry.dbc.messages.has(id) ? entry.dbc : null;
   }
 
   /* ---------- pestaña "DBC": catálogo de definiciones ---------- */
   function renderDbcDefsFileSel() {
     const sel = el("dbcDefsFileSel");
-    if (state.dbcs.length === 0) {
-      sel.innerHTML = '<option value="-1">No DBC files loaded</option>';
-      state.dbcDefs.dbcIdx = null;
+    const assigned = [1, 2, 3].filter((c) => state.channelDbc[c]);
+    if (assigned.length === 0) {
+      sel.innerHTML = '<option value="-1">No DBC assigned to any bus yet</option>';
+      state.dbcDefs.channel = null;
       state.dbcDefs.selectedId = null;
       renderDbcDefsList();
       renderDbcDefsDetail();
       return;
     }
-    if (state.dbcDefs.dbcIdx === null || !state.dbcs[state.dbcDefs.dbcIdx]) {
-      state.dbcDefs.dbcIdx = state.preferredDbcIdx !== null && state.dbcs[state.preferredDbcIdx] ? state.preferredDbcIdx : 0;
+    if (state.dbcDefs.channel === null || !state.channelDbc[state.dbcDefs.channel]) {
+      state.dbcDefs.channel = assigned[0];
     }
-    sel.innerHTML = state.dbcs.map((d, i) => `<option value="${i}">${escapeHtml(d.fileName)}</option>`).join("");
-    sel.value = state.dbcDefs.dbcIdx;
+    sel.innerHTML = assigned.map((c) => `<option value="${c}">CAN${c} — ${escapeHtml(state.channelDbc[c].fileName)}</option>`).join("");
+    sel.value = state.dbcDefs.channel;
     sel.onchange = () => {
-      state.dbcDefs.dbcIdx = parseInt(sel.value, 10);
+      state.dbcDefs.channel = parseInt(sel.value, 10);
       state.dbcDefs.selectedId = null;
       renderDbcDefsList();
       renderDbcDefsDetail();
@@ -991,8 +1104,8 @@
   }
 
   function currentDbcDefsDbc() {
-    if (state.dbcDefs.dbcIdx === null || !state.dbcs[state.dbcDefs.dbcIdx]) return null;
-    return state.dbcs[state.dbcDefs.dbcIdx].dbc;
+    if (state.dbcDefs.channel === null || !state.channelDbc[state.dbcDefs.channel]) return null;
+    return state.channelDbc[state.dbcDefs.channel].dbc;
   }
 
   function renderDbcDefsList() {
@@ -1086,6 +1199,8 @@
       resetChartSeries();
       renderChartStack();
       recomputeAll();
+      // Force the user to pick a DBC per bus before trusting any decode.
+      expandOnlyRailBlock(document.querySelector('.block[data-block="chanmap"]'));
     };
     reader.readAsText(file, "windows-1252");
   }
@@ -1107,7 +1222,7 @@
       const key = r.channel + ":" + r.id;
       let e = idx.get(key);
       if (!e) {
-        const dbc = findDbcForId(r.id);
+        const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null };
         idx.set(key, e);
@@ -1123,7 +1238,7 @@
     const stats = new Map();
     for (let i = 0; i < state.trace.length; i++) {
       const r = state.trace[i];
-      const dbc = findDbcForId(r.id);
+      const dbc = findDbcForChannelId(r.channel, r.id);
       if (!dbc) continue;
       const decoded = decodeMessage(dbc, r.id, r.data);
       if (!decoded) continue;
@@ -1162,13 +1277,14 @@
   function renderVarList() {
     const wrap = el("varList");
     if (!state.varStats) return;
-    const q = (el("varSearch").value || "").toLowerCase();
+    const qRaw = (el("varSearch").value || "").trim();
+    const matcher = qRaw ? globToRegex(qRaw) : null;
     const entries = [...state.varStats.values()].sort((a, b) => b.transitions - a.transitions);
     if (entries.length === 0) { wrap.innerHTML = '<div class="sig-empty">No decoded signal yet.</div>'; return; }
     const maxT = Math.max(1, entries[0].transitions);
     wrap.innerHTML = "";
     for (const e of entries) {
-      if (q && !(e.signalName.toLowerCase().includes(q) || e.msgName.toLowerCase().includes(q))) continue;
+      if (matcher && !(matcher.test(e.signalName) || matcher.test(e.msgName))) continue;
       const key = e.channel + ":" + e.id + ":" + e.signalName;
       const added = state.chart.series.has(key);
       const row = document.createElement("div");
@@ -1205,16 +1321,33 @@
       chip(pct + "%", "decoded");
   }
 
+  // Convierte un patrón de búsqueda con "*" (comodín = cualquier cantidad de caracteres)
+  // en una regex case-insensitive de tipo "contiene"; sin "*" se comporta como un includes() normal.
+  function globToRegex(query) {
+    const pattern = query.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+    return new RegExp(pattern, "i");
+  }
+
   function renderMessageList() {
     const wrap = el("msgList");
-    const q = (el("msgSearch").value || "").toLowerCase();
+    const qRaw = (el("msgSearch").value || "").trim();
+    const matcher = qRaw ? globToRegex(qRaw) : null;
     const entries = [...state.msgIndex.values()].sort((a, b) => b.count - a.count);
     const maxCount = entries.length ? entries[0].count : 1;
     const inCharts = state.tab === "graficas";
     wrap.innerHTML = "";
     for (const e of entries) {
       const hexId = "0x" + e.id.toString(16).toUpperCase();
-      if (q && !((e.name || "").toLowerCase().includes(q) || hexId.toLowerCase().includes(q))) continue;
+      let signalMatch = false;
+      if (matcher) {
+        let hit = matcher.test(e.name || "") || matcher.test(hexId) || matcher.test(String(e.id));
+        if (!hit) {
+          const dbc = findDbcForChannelId(e.channel, e.id);
+          const msg = dbc && dbc.messages.get(e.id);
+          if (msg && msg.signals.some((s) => matcher.test(s.name))) { hit = true; signalMatch = true; }
+        }
+        if (!hit) continue;
+      }
       if (inCharts && !e.name) continue; // sin definición DBC no hay señales para graficar
       const row = document.createElement("div");
       row.className = "msg-row" + (!inCharts && state.selectedMessageKey === e.key ? " active" : "") + (inCharts ? " expandable" : "");
@@ -1232,7 +1365,7 @@
         row.onclick = () => { state.selectedMessageKey = e.key; selectRow(e.lastRow, true); filterToMessage(e); renderMessageList(); };
       }
       wrap.appendChild(row);
-      if (inCharts && state.chart.expanded.has(e.key)) wrap.appendChild(buildSignalPickList(e));
+      if (signalMatch || (inCharts && state.chart.expanded.has(e.key))) wrap.appendChild(buildSignalPickList(e, signalMatch ? matcher : null));
     }
   }
 
@@ -1242,20 +1375,23 @@
     renderMessageList();
   }
 
-  function buildSignalPickList(e) {
+  function buildSignalPickList(e, matcher) {
     const list = document.createElement("div");
     list.className = "sig-pick-list";
-    const dbc = findDbcForId(e.id);
+    const dbc = findDbcForChannelId(e.channel, e.id);
     const msg = dbc && dbc.messages.get(e.id);
-    if (!msg || msg.signals.length === 0) {
+    const allSignals = msg ? msg.signals : [];
+    const signals = matcher ? allSignals.filter((s) => matcher.test(s.name)) : allSignals;
+    if (signals.length === 0) {
       list.innerHTML = '<div class="sig-pick-row"><span class="spname">No signals defined</span></div>';
       return list;
     }
-    for (const sig of msg.signals) {
+    for (const sig of signals) {
       const key = e.channel + ":" + e.id + ":" + sig.name;
       const added = state.chart.series.has(key);
+      const matched = matcher ? matcher.test(sig.name) : false;
       const row = document.createElement("div");
-      row.className = "sig-pick-row" + (added ? " added" : "");
+      row.className = "sig-pick-row" + (added ? " added" : "") + (matched ? " match" : "");
       row.title = added ? "Remove from chart" : "Add to chart";
       const swatch = `<span class="swatch" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
       row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span>`;
@@ -1281,7 +1417,7 @@
       const out = [];
       for (let i = 0; i < state.trace.length; i++) {
         const r = state.trace[i];
-        const dbc = findDbcForId(r.id);
+        const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         if (onlyDecoded && !def) continue;
         if (q) {
@@ -1348,7 +1484,7 @@
       const r = state.trace[rowIdx];
       const d = rowPool[p - first];
       d.style.height = ROW_H + "px";
-      const dbc = findDbcForId(r.id);
+      const dbc = findDbcForChannelId(r.channel, r.id);
       const def = dbc ? dbc.messages.get(r.id) : null;
       d.querySelector(".c-time").textContent = fmtTime(r.t);
       d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
@@ -1390,7 +1526,7 @@
       return;
     }
     const r = state.trace[rowIdx];
-    const dbc = findDbcForId(r.id);
+    const dbc = findDbcForChannelId(r.channel, r.id);
     const hexId = "0x" + r.id.toString(16).toUpperCase();
     const decoded = dbc ? decodeMessage(dbc, r.id, r.data) : null;
 
@@ -1478,7 +1614,7 @@
    * Pestaña "Gráficas" — señales apiladas en ejes de tiempo sincronizados
    * ========================================================= */
   function buildSeries(channel, id, signalName) {
-    const dbc = findDbcForId(id);
+    const dbc = findDbcForChannelId(channel, id);
     const msg = dbc && dbc.messages.get(id);
     const sigDef = msg && msg.signals.find((s) => s.name === signalName);
     const points = [];
@@ -2131,7 +2267,7 @@
     const out = [];
     for (const e of state.msgIndex.values()) {
       if (!e.name) continue;
-      const dbc = findDbcForId(e.id);
+      const dbc = findDbcForChannelId(e.channel, e.id);
       const msg = dbc && dbc.messages.get(e.id);
       if (!msg) continue;
       for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit });
@@ -2141,10 +2277,11 @@
 
   function renderChartAddResults() {
     const input = el("chartAddInput"), box = el("chartAddResults");
-    const q = input.value.trim().toLowerCase();
+    const q = input.value.trim();
     if (!q) { box.classList.remove("open"); box.innerHTML = ""; return; }
+    const matcher = globToRegex(q);
     const matches = chartCandidates()
-      .filter((c) => c.signalName.toLowerCase().includes(q) || c.msgName.toLowerCase().includes(q))
+      .filter((c) => matcher.test(c.signalName) || matcher.test(c.msgName))
       .slice(0, 40);
     box.innerHTML = "";
     if (matches.length === 0) {
@@ -2211,11 +2348,7 @@
   }
 
   wireDrop("dbcDrop", "dbcInput", (files) => {
-    [...files].forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = () => addDbcFile(f.name, reader.result);
-      reader.readAsText(f, "windows-1252");
-    });
+    [...files].forEach((f) => registerDbcFile(f));
   });
   wireDrop("logDrop", "logInput", (files) => loadLogFile(files[0]));
 
@@ -2228,8 +2361,12 @@
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
       const block = h2.closest(".block");
-      block.classList.toggle("collapsed");
-      if (block.dataset.block === "variations" && !block.classList.contains("collapsed")) ensureVarStatsAndRender();
+      if (block.classList.contains("collapsed")) {
+        expandOnlyRailBlock(block);
+        if (block.dataset.block === "variations") ensureVarStatsAndRender();
+      } else {
+        setBlockCollapsed(block, true);
+      }
     });
   });
 
@@ -2262,6 +2399,6 @@
   document.addEventListener("click", (e) => { if (!e.target.closest(".about-wrap")) el("aboutCard").classList.remove("open"); });
 
   updateResultCount();
-  loadStoredDbcs();
+  loadStoredChannelDbcs();
 })();
 </script>
