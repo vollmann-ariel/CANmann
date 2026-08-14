@@ -909,7 +909,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.3.0";
+  const APP_VERSION = "2.4.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1766,6 +1766,7 @@
     renderMessageList();
     renderChartStack();
     refreshVarListIfVisible();
+    scrollToLane(key); // same jump-to-chart used when clicking a #chartReadout row
   }
 
   function removeSignalFromChart(key) {
