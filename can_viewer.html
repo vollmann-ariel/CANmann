@@ -900,8 +900,9 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.1.2";
+  const APP_VERSION = "2.2.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
+  const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
   /* ---------- collapsible rail blocks ---------- */
   function setBlockCollapsed(block, collapsed) {
@@ -1039,27 +1040,36 @@
     }
   }
 
+  let updateSaved = false;
+
   async function applyUpdate() {
+    if (updateSaved) { location.reload(); return; }
     const btn = el("updateBannerBtn");
     btn.disabled = true;
     try {
       const res = await fetch(UPDATE_CHECK_URL, { cache: "no-store", signal: AbortSignal.timeout(15000) });
       const text = await res.text();
       if (window.showSaveFilePicker) {
+        // suggestedName + a stable id: the native dialog opens pre-filled with the current
+        // file's own name, and Chrome remembers the folder used for this id on later
+        // updates — as close to "save over the file I'm running from" as the picker allows.
         const handle = await window.showSaveFilePicker({
-          suggestedName: "can_viewer.html",
+          id: "canmann-update",
+          suggestedName: CURRENT_FILE_NAME,
           types: [{ description: "HTML", accept: { "text/html": [".html"] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(text);
         await writable.close();
-        el("updateBannerText").textContent = "Done — close this tab and reopen the file.";
+        updateSaved = true;
+        el("updateBannerText").textContent = "Saved — click Refresh to reload the new version.";
+        btn.textContent = "Refresh";
       } else {
         const blob = new Blob([text], { type: "text/html" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "can_viewer.html";
+        a.download = CURRENT_FILE_NAME;
         a.click();
         URL.revokeObjectURL(url);
         el("updateBannerText").textContent = "Downloaded to your Downloads folder — replace the current file with it.";
