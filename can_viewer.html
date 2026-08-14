@@ -900,7 +900,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.1.1";
+  const APP_VERSION = "2.1.2";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
 
   /* ---------- collapsible rail blocks ---------- */
@@ -1025,12 +1025,11 @@
 
   async function checkForUpdate() {
     try {
-      const res = await fetch(UPDATE_CHECK_URL, {
-        headers: { Range: "bytes=0-4000" },
-        cache: "no-store",
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok && res.status !== 206) return;
+      // Fetches the whole file rather than a byte range: APP_VERSION sits well past the
+      // CSS/HTML that precedes the script, so a small range can't reliably reach it, and
+      // that offset would only drift further as the file grows.
+      const res = await fetch(UPDATE_CHECK_URL, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return;
       const text = await res.text();
       const m = /const APP_VERSION\s*=\s*"([\d.]+)"/.exec(text);
       if (!m) return;
