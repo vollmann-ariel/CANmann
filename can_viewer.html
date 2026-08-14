@@ -382,10 +382,16 @@
     border-radius: 8px; box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; z-index: 20; display: none;
   }
   .chart-add-results.open { display: block; }
-  .chart-add-results .opt { padding: 7px 10px; cursor: pointer; font-size: 11.5px; display: flex; justify-content: space-between; gap: 8px; }
+  .chart-add-results .opt { padding: 7px 10px; cursor: pointer; font-size: 11.5px; display: flex; align-items: baseline; gap: 8px; }
   .chart-add-results .opt:hover { background: var(--surface-2); }
-  .chart-add-results .opt .n { font-weight: 600; }
-  .chart-add-results .opt .m { color: var(--ink-faint); font-size: 10px; }
+  .chart-add-results .opt.added { background: var(--accent-soft); }
+  .chart-add-results .opt .n { font-weight: 600; flex: 0 0 auto; }
+  .chart-add-results .opt.added .n { color: var(--accent); }
+  .chart-add-results .opt .m {
+    color: var(--ink-faint); font-size: 10px; flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chart-add-results .opt .c { color: var(--ink-dim); font-weight: 600; font-size: 10.5px; flex: 0 0 auto; }
 
   .chart-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; position: relative; }
   .chart-stack { display: flex; flex-direction: column; touch-action: none; }
@@ -614,7 +620,6 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
         <label class="toggle"><input type="checkbox" id="chartTableToggle" /> View as table</label>
-        <span class="result-count" id="chartHint">Add signals from the list on the left (✛) or with the search box.</span>
       </div>
       <div class="chart-scroll" id="chartScroll">
         <div class="chart-stack" id="chartStack">
@@ -904,7 +909,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.2.2";
+  const APP_VERSION = "2.3.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2378,7 +2383,7 @@
       const dbc = findDbcForChannelId(e.channel, e.id);
       const msg = dbc && dbc.messages.get(e.id);
       if (!msg) continue;
-      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit });
+      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit, count: e.count });
     }
     return out;
   }
@@ -2399,12 +2404,16 @@
     } else {
       for (const c of matches) {
         const key = c.channel + ":" + c.id + ":" + c.signalName;
-        const opt = document.createElement("div"); opt.className = "opt";
+        const added = state.chart.series.has(key);
+        const opt = document.createElement("div"); opt.className = "opt" + (added ? " added" : "");
         const n = document.createElement("span"); n.className = "n"; n.textContent = c.signalName;
         const m = document.createElement("span"); m.className = "m";
-        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (state.chart.series.has(key) ? " · already added" : "");
-        opt.appendChild(n); opt.appendChild(m);
-        opt.onclick = () => { addSignalToChart(c.channel, c.id, c.signalName); input.value = ""; box.classList.remove("open"); box.innerHTML = ""; };
+        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (added ? " · added" : "");
+        const cnt = document.createElement("span"); cnt.className = "c"; cnt.textContent = c.count.toLocaleString("en-US");
+        opt.appendChild(n); opt.appendChild(m); opt.appendChild(cnt);
+        // Toggles + re-renders in place (does not close the dropdown) so the user can pick
+        // several signals in a row; it only closes when clicking outside .chart-add-box.
+        opt.onclick = (ev) => { ev.stopPropagation(); toggleSignalInChart(c.channel, c.id, c.signalName, { switchTab: false }); renderChartAddResults(); };
         box.appendChild(opt);
       }
     }
