@@ -186,6 +186,10 @@
   .block-body :focus-visible { outline-offset: -2px; }
   .block.rail-flex { transition: flex-grow .2s ease; }
   .block.collapsed.rail-flex { flex: 0 0 0 !important; }
+  /* min-height:0 lets the block shrink so its body can scroll internally while expanded; while
+     collapsed it must NOT apply, or the header row loses its automatic minimum size and the
+     block collapses shorter than its own padding+title (shorter than the other rail blocks). */
+  .block.rail-flex:not(.collapsed) { min-height: 0; }
 
   /* ---------- Drop zones ---------- */
   .dropzone {
@@ -532,7 +536,7 @@
         </div>
       </section>
 
-      <section class="block rail-flex collapsed" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0;">
+      <section class="block rail-flex collapsed" data-block="messages" style="flex:1 1 0; display:flex; flex-direction:column;">
         <h2><span>Messages Seen</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
           <input class="msg-search" id="msgSearch" placeholder="Search by ID or name…" />
@@ -540,7 +544,7 @@
         </div>
       </section>
 
-      <section class="block rail-flex collapsed" data-block="variations" style="flex:1 1 0; display:flex; flex-direction:column; min-height:0; border-bottom:none;">
+      <section class="block rail-flex collapsed" data-block="variations" style="flex:1 1 0; display:flex; flex-direction:column; border-bottom:none;">
         <h2><span>Most Active</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
           <input class="msg-search" id="varSearch" placeholder="Search signal…" />
@@ -900,7 +904,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.2.1";
+  const APP_VERSION = "2.2.2";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
