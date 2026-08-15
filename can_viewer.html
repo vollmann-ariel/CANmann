@@ -190,6 +190,8 @@
      collapsed it must NOT apply, or the header row loses its automatic minimum size and the
      block collapses shorter than its own padding+title (shorter than the other rail blocks). */
   .block.rail-flex:not(.collapsed) { min-height: 0; }
+  .block.tab-locked h2 { cursor: not-allowed; opacity: .45; }
+  .block.tab-locked h2:hover { color: var(--ink-faint); }
 
   /* ---------- Drop zones ---------- */
   .dropzone {
@@ -909,7 +911,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.6.0";
+  const APP_VERSION = "2.7.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2432,12 +2434,25 @@
   }
 
   /* ---- pestañas ---- */
+  // "Messages Seen" and "Most Active" operate on the loaded trace, which is irrelevant while
+  // browsing the DBC catalog tab — lock them collapsed there instead of leaving them clickable
+  // but pointless.
+  function setMessagesVariationsLocked(locked) {
+    for (const name of ["messages", "variations"]) {
+      const block = document.querySelector(`.block[data-block="${name}"]`);
+      if (!block) continue;
+      block.classList.toggle("tab-locked", locked);
+      if (locked) setBlockCollapsed(block, true);
+    }
+  }
+
   function setTab(tab) {
     if (state.tab === tab) return;
     state.tab = tab;
     el("tabTrazaBtn").classList.toggle("active", tab === "traza");
     el("tabGraficasBtn").classList.toggle("active", tab === "graficas");
     el("tabDbcDefsBtn").classList.toggle("active", tab === "dbcdefs");
+    setMessagesVariationsLocked(tab === "dbcdefs");
     document.querySelectorAll(".tab-traza").forEach((n) => n.classList.toggle("tab-hidden", tab !== "traza"));
     document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
     document.querySelectorAll(".tab-dbcdefs").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcdefs"));
@@ -2489,6 +2504,7 @@
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
       const block = h2.closest(".block");
+      if (block.classList.contains("tab-locked")) return;
       if (block.classList.contains("collapsed")) {
         expandOnlyRailBlock(block);
         if (block.dataset.block === "variations") ensureVarStatsAndRender();
