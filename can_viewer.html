@@ -267,6 +267,7 @@
   }
   .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
   .iconbtn.playing { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .iconbtn.measuring { background: var(--cyan); border-color: var(--cyan); color: var(--accent-ink); }
   .result-count { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
 
   /* ---------- Trace table ---------- */
@@ -440,6 +441,9 @@
   .chart-readout { padding: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .chart-readout .hint { color: var(--ink-faint); font-size: 12px; }
   .chart-readout .t { font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; }
+  .chart-readout-measure { font-size: 11px; color: var(--cyan); margin-bottom: 10px; padding: 6px 8px; border: 1px solid var(--cyan); border-radius: 6px; }
+  .chart-readout-measure .mline { font-weight: 700; font-size: 12.5px; }
+  .chart-readout-measure .mmeta { font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums; font-family: "Cascadia Code", Consolas, monospace; margin-top: 2px; }
   .chart-readout-row { display: flex; flex-direction: column; gap: 3px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
   .chart-readout-row .top { display: flex; align-items: baseline; gap: 8px; }
   .chart-readout-row .swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
@@ -620,6 +624,9 @@
         </div>
         <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
+        </button>
+        <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time between two points">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="measureIcon"><path d="M4 12h16M4 8v8M20 8v8"/></svg>
         </button>
         <label class="toggle"><input type="checkbox" id="chartTableToggle" /> View as table</label>
       </div>
@@ -905,13 +912,14 @@
       hoverT: null,
       tableView: false,
       drag: null,          // {startClientX, startRange}
+      measure: { active: false, t1: null, t2: null }, // manual measurement; t1/t2 are absolute timestamps, same units as points[].t
     },
   };
 
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.7.0";
+  const APP_VERSION = "2.8.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1776,6 +1784,8 @@
   function removeSignalFromChart(key) {
     state.chart.series.delete(key);
     state.chart.order = state.chart.order.filter((k) => k !== key);
+    // sin señales no queda nada que medir; evita que una medición vieja reaparezca cuando se agregue otra
+    if (state.chart.order.length === 0) setMeasureActive(false);
     renderMessageList();
     renderChartStack();
     refreshVarListIfVisible();
@@ -1800,6 +1810,7 @@
     state.chart.expanded.clear();
     state.chart.range = null;
     state.chart.hoverT = null;
+    setMeasureActive(false); // sin esto el botón "Medir" podía quedar visualmente activo tras cargar un log nuevo
   }
 
   /* ---- escalas ---- */
@@ -2058,7 +2069,7 @@
       if (!s.el || !s.el.canvas) continue;
       drawLane(s, styles, gridColor, inkFaint);
     }
-    drawAxis(gridColor, inkFaint);
+    drawAxis(gridColor, inkFaint, styles);
     updateReadout();
   }
 
@@ -2141,9 +2152,24 @@
         ctx.strokeStyle = styles.getPropertyValue("--surface").trim(); ctx.lineWidth = 2; ctx.stroke();
       }
     }
+
+    for (const mt of [state.chart.measure.t1, state.chart.measure.t2]) {
+      if (mt === null || mt < t0 || mt > t1) continue;
+      const mx = Math.round(xOf(mt)) + 0.5;
+      const cyan = styles.getPropertyValue("--cyan").trim();
+      ctx.strokeStyle = cyan; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(mx, marginT); ctx.lineTo(mx, h - marginB); ctx.stroke();
+      const mvp = valueAtTime(pts, mt);
+      if (mvp) {
+        const mpy = Math.round(yOf(mvp.value)) + 0.5;
+        ctx.fillStyle = cyan;
+        ctx.beginPath(); ctx.arc(mx, mpy, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = styles.getPropertyValue("--surface").trim(); ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
   }
 
-  function drawAxis(gridColor, inkFaint) {
+  function drawAxis(gridColor, inkFaint, styles) {
     const canvas = el("chartAxisCanvas");
     const { w, h, dpr } = resizeCanvasForDPR(canvas);
     const ctx = canvas.getContext("2d");
@@ -2163,6 +2189,21 @@
       ctx.fillText((Number.isInteger(tick) ? tick : tick.toFixed(2)) + "s", Math.min(w - 22, Math.max(22, x)), 16);
     }
     ctx.textAlign = "left";
+
+    const m = state.chart.measure;
+    if (m.t1 !== null && m.t2 !== null) {
+      const mtA = Math.min(m.t1, m.t2), mtB = Math.max(m.t1, m.t2);
+      if (mtB >= t0 && mtA <= t1) {
+        const cyan = styles.getPropertyValue("--cyan").trim();
+        const xA = xOf(Math.max(mtA, t0)), xB = xOf(Math.min(mtB, t1));
+        ctx.strokeStyle = cyan; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (mtA >= t0) { ctx.moveTo(Math.round(xA) + 0.5, 1); ctx.lineTo(Math.round(xA) + 0.5, 8); }
+        if (mtB <= t1) { ctx.moveTo(Math.round(xB) + 0.5, 1); ctx.lineTo(Math.round(xB) + 0.5, 8); }
+        ctx.moveTo(xA, 4.5); ctx.lineTo(xB, 4.5);
+        ctx.stroke();
+      }
+    }
   }
 
   /* ---- drag-reorder de las filas del readout ---- */
@@ -2237,6 +2278,24 @@
     }
     const t = state.chart.hoverT !== null ? state.chart.hoverT : (state.chart.range ? state.chart.range.t1 : state.t0);
     panel.innerHTML = "";
+    const m = state.chart.measure;
+    if (m.active) {
+      const box = document.createElement("div");
+      box.className = "chart-readout-measure";
+      if (m.t1 !== null && m.t2 !== null) {
+        const ta = Math.min(m.t1, m.t2), tb = Math.max(m.t1, m.t2);
+        const line = document.createElement("div"); line.className = "mline";
+        line.textContent = "Δt = " + (tb - ta).toFixed(4) + "s";
+        const meta = document.createElement("div"); meta.className = "mmeta";
+        meta.textContent = "t1 = " + (ta - state.t0).toFixed(4) + "s · t2 = " + (tb - state.t0).toFixed(4) + "s";
+        box.appendChild(line); box.appendChild(meta);
+      } else if (m.t1 !== null) {
+        box.textContent = "Point 1 set at t = " + (m.t1 - state.t0).toFixed(4) + "s — click a chart to place point 2";
+      } else {
+        box.textContent = "Measuring: click a chart to place point 1";
+      }
+      panel.appendChild(box);
+    }
     const tEl = document.createElement("div");
     tEl.className = "t";
     tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + (state.chart.hoverT === null ? " · last visible value" : "");
@@ -2287,6 +2346,22 @@
     void s.el.lane.offsetWidth; // fuerza reflow para poder re-disparar la animación si ya se hizo flash antes
     s.el.lane.classList.add("flash");
     setTimeout(() => { if (s.el && s.el.lane) s.el.lane.classList.remove("flash"); }, 950);
+  }
+
+  /* ---- medición manual de tiempo entre dos puntos ---- */
+  function setMeasureActive(active) {
+    state.chart.measure = { active, t1: null, t2: null };
+    el("chartMeasureBtn").classList.toggle("measuring", active);
+    el("chartMeasureBtn").title = active ? "Cancel measurement" : "Measure time between two points";
+    el("measureIcon").innerHTML = active ? '<path d="M6 6l12 12M18 6L6 18"/>' : '<path d="M4 12h16M4 8v8M20 8v8"/>';
+    requestRedraw();
+  }
+  function placeMeasurePoint(t) {
+    const m = state.chart.measure;
+    if (m.t1 === null) m.t1 = t;
+    else if (m.t2 === null) m.t2 = t;
+    else { m.t1 = t; m.t2 = null; } // un 3er click con los dos puntos ya puestos reinicia la medición en el nuevo punto
+    requestRedraw();
   }
 
   /* ---- interacción: cursor, zoom (wheel), pan (drag) ---- */
@@ -2361,6 +2436,9 @@
     });
     stack.addEventListener("pointerup", (e) => {
       if (state.chart.drag) {
+        if (state.chart.measure.active && state.chart.drag.mode === null && state.chart.hoverT !== null) {
+          placeMeasurePoint(state.chart.hoverT);
+        }
         try { stack.releasePointerCapture(e.pointerId); } catch (err) {}
         state.chart.drag = null;
         stack.style.cursor = "";
@@ -2525,6 +2603,7 @@
   el("chartResetZoomBtn").addEventListener("click", () => {
     if (state.chart.fullRange) { state.chart.range = { ...state.chart.fullRange }; requestRedraw(); }
   });
+  el("chartMeasureBtn").addEventListener("click", () => setMeasureActive(!state.chart.measure.active));
   el("chartTableToggle").addEventListener("change", () => {
     state.chart.tableView = el("chartTableToggle").checked;
     buildLaneVisuals();

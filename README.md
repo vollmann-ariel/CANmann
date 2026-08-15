@@ -26,6 +26,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Synchronized cursor across every lane, with a readout panel showing each signal's value, DBC description, and the real timestamp of its last message.
 - Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
 - Alternative table view for each signal.
+- Measure the time between two points: click the ruler button, then click two spots on any chart to see the elapsed time between them.
 
 ## Supported file formats
 
