@@ -383,15 +383,14 @@
     border-radius: 8px; box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; z-index: 20; display: none;
   }
   .chart-add-results.open { display: block; }
-  .chart-add-results .opt { padding: 7px 10px; cursor: pointer; font-size: 11.5px; display: flex; align-items: baseline; gap: 8px; }
+  .chart-add-results .opt { padding: 7px 10px; cursor: pointer; font-size: 11.5px; display: flex; align-items: center; gap: 8px; }
   .chart-add-results .opt:hover { background: var(--surface-2); }
   .chart-add-results .opt.added { background: var(--accent-soft); }
-  .chart-add-results .opt .n { font-weight: 600; flex: 0 0 auto; }
+  .chart-add-results .opt .body { flex: 1 1 auto; min-width: 0; }
+  .chart-add-results .opt .n { font-weight: 600; }
   .chart-add-results .opt.added .n { color: var(--accent); }
-  .chart-add-results .opt .m {
-    color: var(--ink-faint); font-size: 10px; flex: 1 1 auto; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
+  .chart-add-results .opt .sub { font-size: 10px; color: var(--ink-faint); display: flex; gap: 6px; }
+  .chart-add-results .opt .src { font-size: 10px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chart-add-results .opt .c { color: var(--ink-dim); font-weight: 600; font-size: 10.5px; flex: 0 0 auto; }
 
   .chart-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; position: relative; }
@@ -910,7 +909,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.5.0";
+  const APP_VERSION = "2.6.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2387,7 +2386,7 @@
       const dbc = findDbcForChannelId(e.channel, e.id);
       const msg = dbc && dbc.messages.get(e.id);
       if (!msg) continue;
-      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, unit: sig.unit, count: e.count });
+      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, sender: msg.sender, unit: sig.unit, count: e.count });
     }
     return out;
   }
@@ -2403,18 +2402,26 @@
     box.innerHTML = "";
     if (matches.length === 0) {
       const d = document.createElement("div"); d.className = "opt";
-      const m = document.createElement("span"); m.className = "m"; m.textContent = "No results";
-      d.appendChild(m); box.appendChild(d);
+      const body = document.createElement("span"); body.className = "body";
+      const sub = document.createElement("div"); sub.className = "sub";
+      const m = document.createElement("span"); m.textContent = "No results";
+      sub.appendChild(m); body.appendChild(sub); d.appendChild(body); box.appendChild(d);
     } else {
       for (const c of matches) {
         const key = c.channel + ":" + c.id + ":" + c.signalName;
         const added = state.chart.series.has(key);
         const opt = document.createElement("div"); opt.className = "opt" + (added ? " added" : "");
-        const n = document.createElement("span"); n.className = "n"; n.textContent = c.signalName;
-        const m = document.createElement("span"); m.className = "m";
-        m.textContent = c.msgName + (c.unit ? " · " + c.unit : "") + (added ? " · added" : "");
+        const body = document.createElement("span"); body.className = "body";
+        const n = document.createElement("div"); n.className = "n"; n.textContent = c.signalName;
+        const sub = document.createElement("div"); sub.className = "sub";
+        sub.textContent = c.msgName + " · Ch " + c.channel + (c.unit ? " · " + c.unit : "") + (added ? " · added" : "");
+        body.appendChild(n); body.appendChild(sub);
+        if (c.sender) {
+          const src = document.createElement("div"); src.className = "src"; src.textContent = c.sender;
+          body.appendChild(src);
+        }
         const cnt = document.createElement("span"); cnt.className = "c"; cnt.textContent = c.count.toLocaleString("en-US");
-        opt.appendChild(n); opt.appendChild(m); opt.appendChild(cnt);
+        opt.appendChild(body); opt.appendChild(cnt);
         // Toggles + re-renders in place (does not close the dropdown) so the user can pick
         // several signals in a row; it only closes when clicking outside .chart-add-box.
         opt.onclick = (ev) => { ev.stopPropagation(); toggleSignalInChart(c.channel, c.id, c.signalName, { switchTab: false }); renderChartAddResults(); };
