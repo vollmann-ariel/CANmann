@@ -236,6 +236,7 @@
   .msg-row .body { flex: 1 1 auto; min-width: 0; }
   .msg-row .name { font-weight: 600; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .msg-row .sub { font-size: 10px; color: var(--ink-faint); display: flex; gap: 6px; }
+  .msg-row .src { font-size: 10px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .msg-row .count { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; }
   .msg-row .freqbar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); opacity: .5; border-radius: 0 0 6px 6px; }
 
@@ -909,7 +910,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.4.0";
+  const APP_VERSION = "2.5.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1359,7 +1360,7 @@
         const key = r.channel + ":" + r.id + ":" + sig.name;
         let e = stats.get(key);
         if (!e) {
-          e = { channel: r.channel, id: r.id, signalName: sig.name, msgName: decoded.message.name, unit: sig.unit, transitions: 0, count: 0, lastRaw: null };
+          e = { channel: r.channel, id: r.id, signalName: sig.name, msgName: decoded.message.name, sender: decoded.message.sender, unit: sig.unit, transitions: 0, count: 0, lastRaw: null };
           stats.set(key, e);
         }
         e.count++;
@@ -1409,6 +1410,7 @@
         <span class="body">
           <div class="name">${escapeHtml(e.signalName)}</div>
           <div class="sub"><span>${escapeHtml(e.msgName)}</span><span>·</span><span>Ch ${e.channel}</span></div>
+          ${e.sender ? `<div class="src">${escapeHtml(e.sender)}</div>` : ""}
         </span>
         <span class="count">${e.transitions.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.transitions / maxT) * 100)}%"></span>`;
@@ -1453,7 +1455,7 @@
       const hexId = "0x" + e.id.toString(16).toUpperCase();
       let signalMatch = false;
       if (matcher) {
-        let hit = matcher.test(e.name || "") || matcher.test(hexId) || matcher.test(String(e.id));
+        let hit = matcher.test(e.name || "") || matcher.test(hexId) || matcher.test(String(e.id)) || matcher.test(e.sender || "");
         if (!hit) {
           const dbc = findDbcForChannelId(e.channel, e.id);
           const msg = dbc && dbc.messages.get(e.id);
@@ -1468,7 +1470,8 @@
         <span class="status-dot ${e.name ? "ok" : "unknown"}"></span>
         <span class="body">
           <div class="name">${escapeHtml(e.name || hexId)}</div>
-          <div class="sub"><span>${hexId}</span><span>·</span><span>Ch ${e.channel}</span>${e.sender ? `<span>·</span><span>${escapeHtml(e.sender)}</span>` : ""}</div>
+          <div class="sub"><span>${hexId}</span><span>·</span><span>Ch ${e.channel}</span></div>
+          ${e.sender ? `<div class="src">${escapeHtml(e.sender)}</div>` : ""}
         </span>
         <span class="count">${e.count.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.count / maxCount) * 100)}%"></span>`;
@@ -1741,7 +1744,7 @@
       points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
     }
     return {
-      channel, id, signalName, msgName: msg ? msg.name : "0x" + id.toString(16),
+      channel, id, signalName, msgName: msg ? msg.name : "0x" + id.toString(16), sender: msg ? msg.sender : "",
       unit: sigDef ? sigDef.unit : "", comment: sigDef ? sigDef.comment : null, points, el: null,
       sigDef, trigger: null, triggerEvents: [], triggerEventIdx: -1, triggerUIMode: "collapsed",
     };
@@ -1974,7 +1977,7 @@
         <div class="chart-lane-head">
           <span class="swatch" style="background:var(${s.colorVar})"></span>
           <span class="lname">${escapeHtml(s.signalName)}</span>
-          <span class="lmeta">${escapeHtml(s.msgName)}${s.comment ? " — " + escapeHtml(s.comment) : ""}</span>
+          <span class="lmeta">${escapeHtml(s.msgName)}${s.sender ? " · " + escapeHtml(s.sender) : ""}${s.comment ? " — " + escapeHtml(s.comment) : ""}</span>
           <span class="lval"></span>
           <button type="button" title="Remove">✕</button>
         </div>
@@ -2228,7 +2231,7 @@
     if (rowDrag) return; // no reconstruir las filas mientras se arrastra una: perdería el pointer capture
     const panel = el("chartReadout");
     if (state.chart.order.length === 0) {
-      panel.innerHTML = '<div class="hint">Pasá el mouse por una gráfica para ver el valor de cada señal en ese instante.</div>';
+      panel.innerHTML = '<div class="hint">Hover over a chart to see each signal\'s value at that instant.</div>';
       return;
     }
     const t = state.chart.hoverT !== null ? state.chart.hoverT : (state.chart.range ? state.chart.range.t1 : state.t0);
