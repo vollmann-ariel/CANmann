@@ -196,8 +196,6 @@
      collapsed it must NOT apply, or the header row loses its automatic minimum size and the
      block collapses shorter than its own padding+title (shorter than the other rail blocks). */
   .block.rail-flex:not(.collapsed) { min-height: 0; }
-  .block.tab-locked h2 { cursor: not-allowed; opacity: .45; }
-  .block.tab-locked h2:hover { color: var(--ink-faint); }
 
   /* ---------- Drop zones ---------- */
   .dropzone {
@@ -371,11 +369,6 @@
   .sig-pick-row.match { background: var(--accent-soft); }
   .sig-pick-row.match .spname { color: var(--accent); font-weight: 600; }
 
-  /* ---------- DBC definitions browser ---------- */
-  .dbcdefs-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
-  .dbcdefs-pane .msg-list-wrap { padding: 10px 14px; }
-  .dbcdefs-pane .msg-row .name { white-space: normal; }
-
   /* ---------- Chart view ---------- */
   .chart-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
   .chart-toolbar {
@@ -472,8 +465,8 @@
    * DBC Edit tab — ported from dbc_editor.html. Every selector below is scoped under
    * .dbe-scope (applied to #dbeToolbarNav, #dbeRailBlocksWrap, and #dbcEditPane) so it can
    * reuse dbc_editor.html's original class names verbatim without colliding with identically-
-   * named classes elsewhere in this file (.msg-row, .msg-search, .dropzone, .empty-hint, etc.
-   * all exist in both apps with different rules).
+   * named classes elsewhere in this file (.msg-row, .msg-search, .empty-hint, etc. all exist
+   * in both apps with different rules).
    * ========================================================= */
   .dbe-scope input, .dbe-scope select, .dbe-scope textarea, .dbe-scope button { font: inherit; color: inherit; }
   .dbe-scope input, .dbe-scope select, .dbe-scope textarea {
@@ -511,7 +504,11 @@
      size and gets crushed by the "grow" block's flex demand (same mechanic as the rest of this file). */
   .dbe-scope .rail-block:not(.collapsed) { min-height: 0; }
   .dbe-scope .rail-block h2 {
-    margin: 0; padding: 9px 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+    /* 12px top/bottom (not 9px) so a collapsed .rail-block's total height (h2 padding + line-height
+       + border) lands on the exact same number of pixels as a collapsed default .block (whose 12px
+       comes from the section's own padding instead, since .rail-block carries no section-level
+       padding of its own) — same collapsed-header height in both accordions. */
+    margin: 0; padding: 12px 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
     color: var(--ink-faint); font-weight: 700; display: flex; align-items: center; justify-content: space-between;
     cursor: pointer; user-select: none; flex: 0 0 auto;
   }
@@ -521,21 +518,33 @@
   /* max-height/opacity transition (JS pins scrollHeight before animating, same trick as
      can_viewer.html's own .block-body — see setRailBlockCollapsed) instead of an instant
      display:none, so this accordion opens/closes at the same speed as the default rail blocks. */
-  .dbe-scope .rail-block .body { padding: 0 12px 12px; overflow-y: auto; min-height: 0; transition: max-height .2s ease, opacity .15s ease; opacity: 1; }
-  .dbe-scope .rail-block.collapsed .body { max-height: 0; opacity: 0; }
-  .dbe-scope .rail-block.grow .body { flex: 1 1 auto; }
+  /* ">" (direct child), not a descendant selector — #dbeMsgList's own message rows each have their
+     own inner .body span (matching Most Active/Messages Seen's row markup), which a bare
+     ".rail-block .body" would also match at any depth and leak this padding/overflow onto. */
+  .dbe-scope .rail-block > .body { padding: 0 12px 12px; overflow-y: auto; min-height: 0; transition: max-height .2s ease, opacity .15s ease; opacity: 1; }
+  /* padding must ALSO drop to 0 while collapsed — max-height:0 alone can't shrink a box below its
+     own padding (border-box only caps the box at 0, it doesn't shrink padding to fit), so the
+     bottom padding was surviving as a ~12px "ghost" under the collapsed header even at max-height:0. */
+  .dbe-scope .rail-block.collapsed > .body { max-height: 0; opacity: 0; padding: 0; }
+  .dbe-scope .rail-block.grow > .body { flex: 1 1 auto; }
 
   .dbe-scope .msg-search { width: 100%; margin-bottom: 8px; }
+  /* Row shape matches can_viewer.html's own .msg-row exactly (used by Messages Seen/Most Active
+     in the default rail) — same classes, same fields (name/sub/src/count), by request. */
   .dbe-scope .msg-row {
-    display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    position: relative; margin-bottom: 2px;
   }
   .dbe-scope .msg-row:hover { background: var(--surface-2); }
   .dbe-scope .msg-row.active { background: var(--accent-soft-2); }
-  .dbe-scope .msg-row .r1 { display: flex; gap: 6px; align-items: baseline; }
-  .dbe-scope .msg-row .id { font-family: Consolas, monospace; font-size: 10.5px; color: var(--ink-faint); flex: 0 0 auto; }
-  .dbe-scope .msg-row .name { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dbe-scope .msg-row .n { margin-left: auto; font-size: 10px; color: var(--ink-faint); flex: 0 0 auto; }
-  .dbe-scope .msg-row .r2 { font-size: 10px; color: var(--ink-faint); }
+  .dbe-scope .msg-row .body { flex: 1 1 auto; min-width: 0; }
+  .dbe-scope .msg-row .name { font-weight: 600; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbe-scope .msg-row .sub { font-size: 10px; color: var(--ink-faint); display: flex; gap: 6px; }
+  .dbe-scope .msg-row .src { font-size: 10px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbe-scope .msg-row .count { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; }
+  /* Same divider as #msgList's .freqbar, but fixed-width: there's no real "how often is this
+     message seen" frequency to measure here, this is purely a between-row divider styled to match. */
+  .dbe-scope .msg-row .freqbar { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: var(--accent); opacity: .5; border-radius: 0 0 6px 6px; }
   .dbe-scope .add-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: flex-end; }
   .dbe-scope .add-row input { flex: 1 1 auto; min-width: 0; }
   .dbe-scope .add-field { display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; }
@@ -547,6 +556,18 @@
 
   .dbe-scope .detail { flex: 1 1 auto; overflow-y: auto; padding: 18px 22px; min-height: 0; }
   .dbe-scope .empty-hint { color: var(--ink-faint); font-size: 13px; padding: 40px 0; text-align: center; }
+
+  /* Read-only mode disables editing by disabling these <fieldset>s (see openModel/applyReadOnly) —
+     a native fieldset[disabled] cascades to every input/select/textarea/button inside it in one
+     shot, no per-field wiring needed. Reset the browser's default fieldset chrome first (border,
+     padding, min-width) since these stand in for plain <div>s everywhere else in this layout. */
+  .dbe-scope fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  /* Background tint only, never opacity/color — dimming the whole subtree also dims the text,
+     which reads poorly (esp. dark theme). Fields stay at full text contrast, just visibly flatter. */
+  .dbe-scope fieldset:disabled * { cursor: not-allowed; }
+  .dbe-scope fieldset:disabled input,
+  .dbe-scope fieldset:disabled select,
+  .dbe-scope fieldset:disabled textarea { background: var(--surface-3); }
 
   .dbe-scope .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
@@ -605,11 +626,10 @@
   .dbe-scope .kv-add input { flex: 1 1 auto; min-width: 0; }
 
   .dbcedit-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
-  .dbe-scope .dropzone {
+  .dbe-scope .dbe-empty-state {
     flex: 1 1 auto; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
     color: var(--ink-faint); text-align: center; padding: 40px; cursor: pointer;
   }
-  .dbe-scope .dropzone.drag { color: var(--accent); }
 </style>
 
 <div class="app">
@@ -624,14 +644,14 @@
     <nav class="tabbar">
       <button type="button" class="tab-btn" id="tabTrazaBtn">Trace</button>
       <button type="button" class="tab-btn active" id="tabGraficasBtn">Graphs</button>
-      <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC View</button>
-      <button type="button" class="tab-btn" id="tabDbcEditBtn">DBC Edit</button>
+      <button type="button" class="tab-btn" id="tabDbcEditBtn">DBC</button>
     </nav>
     <nav class="tabbar dbe-scope tab-dbcedit tab-hidden" id="dbeToolbarNav">
       <button type="button" class="btn" id="newBtn">New</button>
-      <button type="button" class="btn" id="openBtn">Open .dbc</button>
+      <label class="toggle" title="Open the next .dbc file without allowing any edits"><input type="checkbox" id="dbeReadOnlyCheck" checked /> Read-only</label>
+      <button type="button" class="btn" id="openBtn">Open</button>
       <input type="file" id="fileInput" accept=".dbc" hidden />
-      <button type="button" class="btn primary" id="saveBtn" disabled>Save as .dbc</button>
+      <button type="button" class="btn primary" id="saveBtn" disabled style="display:none">Save</button>
       <span class="dirty-dot" id="dirtyDot" title="Unsaved changes"></span>
       <span class="fname" id="fnameLabel"></span>
     </nav>
@@ -643,13 +663,13 @@
           <rect x="3" y="5" width="5" height="14" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
         </svg>
       </button>
-      <button type="button" class="iconbtn layout-toggle-btn" id="toggleToolbarBtn" title="Toggle toolbar" aria-label="Toggle toolbar" aria-pressed="true">
+      <button type="button" class="iconbtn layout-toggle-btn hide-in-dbcedit" id="toggleToolbarBtn" title="Toggle toolbar" aria-label="Toggle toolbar" aria-pressed="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="4" width="20" height="16" rx="2.5"/>
           <rect x="3" y="5" width="18" height="4" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
         </svg>
       </button>
-      <button type="button" class="iconbtn layout-toggle-btn" id="toggleRailRightBtn" title="Toggle right panel" aria-label="Toggle right panel" aria-pressed="true">
+      <button type="button" class="iconbtn layout-toggle-btn hide-in-dbcedit" id="toggleRailRightBtn" title="Toggle right panel" aria-label="Toggle right panel" aria-pressed="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="4" width="20" height="16" rx="2.5"/>
           <rect x="16" y="5" width="5" height="14" rx="1" fill="currentColor" stroke="none" opacity=".6"/>
@@ -729,33 +749,36 @@
         <h2><span id="msgCountLabel">Messages</span><span class="chev">▾</span></h2>
         <div class="body">
           <input class="msg-search" id="dbeMsgSearch" placeholder="Search by name, ID, or signal…" />
-          <div class="add-row">
-            <input id="newMsgId" placeholder="ID (hex, e.g. 0x18FEF100)" style="max-width:170px" title="The CAN identifier for this message: 11-bit standard, or 29-bit if Extended is checked (typical for J1939/PGN-based IDs)." />
-            <input id="newMsgName" placeholder="New message name" title="Message name — must be unique in the file, used as its identifier throughout the DBC." />
-            <button class="btn small" id="addMsgBtn">+ Add</button>
-          </div>
-          <div id="dbeMsgList"></div>
+          <!-- search stays outside the fieldset so browsing/filtering still works in read-only mode -->
+          <fieldset class="dbe-fieldset" data-dbe-fieldset>
+            <div class="add-row">
+              <input id="newMsgId" placeholder="ID (hex, e.g. 0x18FEF100)" style="max-width:170px" title="The CAN identifier for this message: 11-bit standard, or 29-bit if Extended is checked (typical for J1939/PGN-based IDs)." />
+              <input id="newMsgName" placeholder="New message name" title="Message name — must be unique in the file, used as its identifier throughout the DBC." />
+              <button class="btn small" id="addMsgBtn">+ Add</button>
+            </div>
+            <div id="dbeMsgList"></div>
+          </fieldset>
         </div>
       </section>
       <section class="rail-block collapsed" data-block="dbeNodes">
         <h2><span>Nodes (BU_)</span><span class="chev">▾</span></h2>
-        <div class="body">
+        <fieldset class="body dbe-fieldset" data-dbe-fieldset>
           <div class="add-row">
             <input id="newNodeName" placeholder="New node name" title="Name of a bus node/ECU (BU_) — used as the Sender on messages and as a Receiver on signals." />
             <button class="btn small" id="addNodeBtn">+ Add</button>
           </div>
           <div id="nodeList"></div>
-        </div>
+        </fieldset>
       </section>
       <section class="rail-block collapsed" data-block="dbeVtables">
         <h2><span>Value tables (VAL_TABLE_)</span><span class="chev">▾</span></h2>
-        <div class="body">
+        <fieldset class="body dbe-fieldset" data-dbe-fieldset>
           <div class="add-row">
             <input id="newVTableName" placeholder="New table name" title="Name of a shared value table (VAL_TABLE_) you can copy into any signal's own value table." />
             <button class="btn small" id="addVTableBtn">+ Add</button>
           </div>
           <div id="vtableList"></div>
-        </div>
+        </fieldset>
       </section>
     </div>
     </aside>
@@ -841,32 +864,14 @@
       </div>
     </aside>
 
-    <main class="dbcdefs-pane tab-dbcdefs tab-hidden" id="dbcDefsPane">
-      <div class="toolbar">
-        <select id="dbcDefsFileSel" title="Choose DBC file"></select>
-        <div class="search-box">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input id="dbcDefsSearch" placeholder="Search message or signal…" />
-        </div>
-        <span class="result-count" id="dbcDefsCount"></span>
-      </div>
-      <div class="msg-list-wrap" id="dbcDefsList"></div>
-    </main>
-
-    <aside class="rail rail-right tab-dbcdefs tab-hidden" id="dbcDefsDetailRail">
-      <div class="sig-panel" id="dbcDefsDetail">
-        <div class="sig-empty">Select a message to see its full definition.</div>
-      </div>
-    </aside>
-
     <main class="dbcedit-pane dbe-scope tab-dbcedit tab-hidden" id="dbcEditPane">
-      <div class="dropzone" id="dropzone">
-        <div style="font-size:15px;font-weight:700">Open or drop a .dbc file to start editing</div>
-        <div style="font-size:12px">…or click "New" above to create one from scratch.</div>
+      <div class="dbe-empty-state" id="dbeEmptyState">
+        <div style="font-size:15px;font-weight:700">Click "Open" above to start editing a .dbc file</div>
+        <div style="font-size:12px">…or click "New" to create one from scratch.</div>
       </div>
-      <div class="detail" id="detail" style="display:none">
+      <fieldset class="detail dbe-fieldset" id="detail" data-dbe-fieldset style="display:none">
         <div class="empty-hint">Pick a message on the left, or add a new one.</div>
-      </div>
+      </fieldset>
     </main>
   </div>
 </div>
@@ -1096,7 +1101,6 @@
   const state = {
     dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC subidos, listados como referencia; NO se leen/parsean hasta asignarse a un bus
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
-    dbcDefs: { channel: null, selectedId: null }, // pestaña "DBC": qué bus (DBC asignado) se está explorando y qué mensaje está seleccionado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     filtered: null,       // array of row indices, or null = all
@@ -1124,7 +1128,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.9.1";
+  const APP_VERSION = "3.1.5";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1326,7 +1330,6 @@
       list.appendChild(pill);
     });
     renderChanMap();
-    renderDbcDefsFileSel();
   }
 
   function registerDbcFile(file) {
@@ -1365,7 +1368,6 @@
   function unassignChannel(channel) {
     state.channelDbc[channel] = null;
     forgetChannelDbc(channel);
-    if (state.dbcDefs.channel === channel) { state.dbcDefs.channel = null; state.dbcDefs.selectedId = null; }
     renderDbcList();
     recomputeAll();
   }
@@ -1406,104 +1408,6 @@
   }
 
   /* ---------- pestaña "DBC": catálogo de definiciones ---------- */
-  function renderDbcDefsFileSel() {
-    const sel = el("dbcDefsFileSel");
-    const assigned = [1, 2, 3].filter((c) => state.channelDbc[c]);
-    if (assigned.length === 0) {
-      sel.innerHTML = '<option value="-1">No DBC assigned to any bus yet</option>';
-      state.dbcDefs.channel = null;
-      state.dbcDefs.selectedId = null;
-      renderDbcDefsList();
-      renderDbcDefsDetail();
-      return;
-    }
-    if (state.dbcDefs.channel === null || !state.channelDbc[state.dbcDefs.channel]) {
-      state.dbcDefs.channel = assigned[0];
-    }
-    sel.innerHTML = assigned.map((c) => `<option value="${c}">CAN${c} — ${escapeHtml(state.channelDbc[c].fileName)}</option>`).join("");
-    sel.value = state.dbcDefs.channel;
-    sel.onchange = () => {
-      state.dbcDefs.channel = parseInt(sel.value, 10);
-      state.dbcDefs.selectedId = null;
-      renderDbcDefsList();
-      renderDbcDefsDetail();
-    };
-    renderDbcDefsList();
-  }
-
-  function currentDbcDefsDbc() {
-    if (state.dbcDefs.channel === null || !state.channelDbc[state.dbcDefs.channel]) return null;
-    return state.channelDbc[state.dbcDefs.channel].dbc;
-  }
-
-  function renderDbcDefsList() {
-    const wrap = el("dbcDefsList");
-    const dbc = currentDbcDefsDbc();
-    if (!dbc) {
-      wrap.innerHTML = '<div class="sig-empty">Load a DBC file to see its messages.</div>';
-      el("dbcDefsCount").textContent = "";
-      return;
-    }
-    const q = (el("dbcDefsSearch").value || "").trim().toLowerCase();
-    const all = [...dbc.messages.values()].sort((a, b) => a.name.localeCompare(b.name));
-    wrap.innerHTML = "";
-    let shown = 0;
-    for (const msg of all) {
-      if (q) {
-        const hexId = "0x" + msg.id.toString(16);
-        const hit = msg.name.toLowerCase().includes(q) || hexId.toLowerCase().includes(q) || msg.signals.some((s) => s.name.toLowerCase().includes(q));
-        if (!hit) continue;
-      }
-      shown++;
-      const row = document.createElement("div");
-      row.className = "msg-row" + (state.dbcDefs.selectedId === msg.id ? " active" : "");
-      row.innerHTML = `
-        <span class="body">
-          <div class="name">${escapeHtml(msg.name)}</div>
-          <div class="sub"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>·</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>·</span><span>${escapeHtml(msg.sender)}</span>` : ""}</div>
-        </span>
-        <span class="count">${msg.signals.length} sig.</span>`;
-      row.onclick = () => { state.dbcDefs.selectedId = msg.id; renderDbcDefsList(); renderDbcDefsDetail(); };
-      wrap.appendChild(row);
-    }
-    if (shown === 0) wrap.innerHTML = '<div class="sig-empty">No message matches the search.</div>';
-    el("dbcDefsCount").textContent = shown.toLocaleString("en-US") + " / " + all.length.toLocaleString("en-US");
-  }
-
-  function renderDbcDefsDetail() {
-    const panel = el("dbcDefsDetail");
-    const dbc = currentDbcDefsDbc();
-    const msg = dbc && state.dbcDefs.selectedId !== null ? dbc.messages.get(state.dbcDefs.selectedId) : null;
-    if (!msg) {
-      panel.innerHTML = '<div class="sig-empty">Select a message to see its full definition.</div>';
-      return;
-    }
-    let html = `<div class="sig-header">
-      <div class="msgname">${escapeHtml(msg.name)}</div>
-      <div class="msgmeta"><span>0x${msg.id.toString(16).toUpperCase()}</span><span>DLC ${msg.dlc}</span>${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}</div>
-      ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
-    </div>`;
-    if (msg.isMultiplexed) html += '<div class="mux-note">Multiplexed signals — showing all branches</div>';
-    html += '<div class="sig-table">';
-    if (msg.signals.length === 0) html += '<div class="sig-empty">This message has no signals defined.</div>';
-    for (const sig of msg.signals) {
-      const hasValueTable = !!sig.valueTable;
-      const scale = sig.factor !== 1 || sig.offset !== 0
-        ? ` · raw × ${formatNum(sig.factor)}${sig.offset !== 0 ? " " + (sig.offset > 0 ? "+" : "") + formatNum(sig.offset) : ""}`
-        : "";
-      const rangeStr = hasValueTable ? `${sig.valueTable.size} possible value${sig.valueTable.size === 1 ? "" : "s"}` : `${formatNum(sig.min)} – ${formatNum(sig.max)}`;
-      const muxTag = sig.isMultiplexor ? " ⚑ multiplexor" : sig.muxValue !== null ? ` (m${sig.muxValue})` : "";
-      html += `<div class="sig-row">
-        <div class="top"><span class="sname">${escapeHtml(sig.name)}${muxTag}</span><span class="sval">${escapeHtml(rangeStr)}${!hasValueTable && sig.unit ? `<span class="unit">${escapeHtml(sig.unit)}</span>` : ""}</span></div>
-        <div class="sraw">${formatBitSpec(sig)}${scale}</div>
-        ${hasValueTable ? `<div class="scomment">${[...sig.valueTable.entries()].map(([k, v]) => `${k}=${escapeHtml(v)}`).join(", ")}</div>` : ""}
-        ${sig.comment ? `<div class="scomment">${escapeHtml(sig.comment)}</div>` : ""}
-      </div>`;
-    }
-    html += "</div>";
-    panel.innerHTML = html;
-  }
-
   /* ---------- Log loading ---------- */
   function renderLogList(fileName, count) {
     const list = el("logList");
@@ -2717,37 +2621,25 @@
   }
 
   /* ---- pestañas ---- */
-  // "Messages Seen" and "Most Active" operate on the loaded trace, which is irrelevant while
-  // browsing the DBC catalog tab — lock them collapsed there instead of leaving them clickable
-  // but pointless.
-  function setMessagesVariationsLocked(locked) {
-    for (const name of ["messages", "variations"]) {
-      const block = document.querySelector(`.block[data-block="${name}"]`);
-      if (!block) continue;
-      block.classList.toggle("tab-locked", locked);
-      if (locked) setBlockCollapsed(block, true);
-    }
-  }
-
   function setTab(tab) {
     if (state.tab === tab) return;
     state.tab = tab;
     el("tabTrazaBtn").classList.toggle("active", tab === "traza");
     el("tabGraficasBtn").classList.toggle("active", tab === "graficas");
-    el("tabDbcDefsBtn").classList.toggle("active", tab === "dbcdefs");
     el("tabDbcEditBtn").classList.toggle("active", tab === "dbcedit");
-    setMessagesVariationsLocked(tab === "dbcdefs");
     document.querySelectorAll(".tab-traza").forEach((n) => n.classList.toggle("tab-hidden", tab !== "traza"));
     document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
-    document.querySelectorAll(".tab-dbcdefs").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcdefs"));
     document.querySelectorAll(".tab-dbcedit").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcedit"));
     // DBC Edit takes over the whole left rail for its own message/node/value-table accordion
     // (see #dbeRailBlocksWrap), so the normal DBC/Log/Bus-assignment/Messages/Most-Active blocks
-    // hide completely there instead of just locking like they do for the DBC View tab above.
+    // hide completely there instead of staying visible like they do for Trace/Graphs.
     el("defaultRailBlocksWrap").classList.toggle("tab-hidden", tab === "dbcedit");
     // stats-strip reflects the loaded trace (message count/duration/decoded%), which is irrelevant
     // while editing a DBC — and the DBC Edit toolbar nav needs that header space for itself anyway.
     el("statsStrip").classList.toggle("tab-hidden", tab === "dbcedit");
+    // toggleToolbarBtn/toggleRailRightBtn control .toolbar/.chart-toolbar and .rail-right, none of
+    // which exist on the DBC Edit tab — hide the buttons rather than leave them controlling nothing.
+    document.querySelectorAll(".hide-in-dbcedit").forEach((n) => n.classList.toggle("tab-hidden", tab === "dbcedit"));
     renderMessageList();
     if (tab === "traza") {
       // el viewport puede haber quedado oculto (clientHeight 0) mientras se filtraba/seleccionaba en otra pestaña:
@@ -2756,7 +2648,6 @@
       renderVisibleRows();
     }
     if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) requestRedraw(); }
-    if (tab === "dbcdefs") renderDbcDefsFileSel();
   }
 
   /* ---------- misc UI wiring ---------- */
@@ -2796,7 +2687,6 @@
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
       const block = h2.closest(".block");
-      if (block.classList.contains("tab-locked")) return;
       if (block.classList.contains("collapsed")) {
         expandOnlyRailBlock(block);
         if (block.dataset.block === "variations") ensureVarStatsAndRender();
@@ -2812,9 +2702,7 @@
 
   el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
   el("tabGraficasBtn").addEventListener("click", () => setTab("graficas"));
-  el("tabDbcDefsBtn").addEventListener("click", () => setTab("dbcdefs"));
   el("tabDbcEditBtn").addEventListener("click", () => setTab("dbcedit"));
-  el("dbcDefsSearch").addEventListener("input", renderDbcDefsList);
   el("chartResetZoomBtn").addEventListener("click", () => {
     if (state.chart.fullRange) { state.chart.range = { ...state.chart.fullRange }; requestRedraw(); }
   });
@@ -2851,7 +2739,7 @@
  * above; the only two id renames from the original standalone file are msgSearch→dbeMsgSearch
  * and msgList→dbeMsgList, since can_viewer.html's own Messages Seen panel already used those.
  * This document (state.model below) is entirely independent of the DBC files loaded for
- * decoding in Trace/Graphs/DBC View — New/Open/Save here never touch those.
+ * decoding in Trace/Graphs — New/Open/Save here never touch those.
  * ========================================================= */
 (function () {
   "use strict";
@@ -3293,7 +3181,7 @@
   const el = (id) => document.getElementById(id);
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  const state = { model: null, fileName: "new.dbc", selectedMsgId: null, openSignal: null, dirty: false };
+  const state = { model: null, fileName: "new.dbc", selectedMsgId: null, openSignal: null, dirty: false, readOnly: false };
 
   function markDirty() { state.dirty = true; el("dirtyDot").classList.add("on"); }
   function markClean() { state.dirty = false; el("dirtyDot").classList.remove("on"); }
@@ -3311,17 +3199,27 @@
     return id;
   }
 
-  function openModel(model, fileName) {
+  // fieldset[disabled] cascades to every input/select/textarea/button it contains, even ones
+  // created later by innerHTML/appendChild — so re-rendering a message/signal/node/vtable list
+  // after this runs doesn't need to re-apply read-only itself, the fieldset ancestor already covers it.
+  function applyReadOnly(readOnly) {
+    state.readOnly = readOnly;
+    document.querySelectorAll("[data-dbe-fieldset]").forEach((fs) => { fs.disabled = readOnly; });
+    el("saveBtn").style.display = readOnly ? "none" : "";
+  }
+
+  function openModel(model, fileName, readOnly) {
     state.model = model;
     state.fileName = fileName;
     state.selectedMsgId = null;
     state.openSignal = null;
     markClean();
-    el("fnameLabel").textContent = fileName;
+    applyReadOnly(readOnly);
+    el("fnameLabel").textContent = fileName + (readOnly ? " (read-only)" : "");
     el("saveBtn").disabled = false;
     el("dbeRailBlocksWrap").style.display = "flex";
     el("detail").style.display = "block";
-    el("dropzone").style.display = "none";
+    el("dbeEmptyState").style.display = "none";
     renderAll();
   }
 
@@ -3332,24 +3230,37 @@
     renderDetail();
   }
 
+  // Converts a search pattern with "*" (wildcard = any run of characters) into a case-insensitive
+  // "contains" regex, matching the same convention as the trace/graphs search boxes elsewhere in
+  // this file; without "*" it behaves like a plain substring search.
+  function globToRegex(query) {
+    const pattern = query.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+    return new RegExp(pattern, "i");
+  }
+
   /* ---------- message list ---------- */
   function renderMessageList() {
     const wrap = el("dbeMsgList");
-    const q = (el("dbeMsgSearch").value || "").trim().toLowerCase();
+    const qRaw = (el("dbeMsgSearch").value || "").trim();
+    const matcher = qRaw ? globToRegex(qRaw) : null;
     const model = state.model;
     el("msgCountLabel").textContent = `Messages (${model.messages.length})`;
     wrap.innerHTML = "";
     for (const msg of model.messages) {
-      if (q) {
-        const hit = msg.name.toLowerCase().includes(q) || hexId(msg.id).toLowerCase().includes(q) ||
-          msg.signals.some((s) => s.name.toLowerCase().includes(q));
+      if (matcher) {
+        const hit = matcher.test(msg.name) || matcher.test(hexId(msg.id)) || msg.signals.some((s) => matcher.test(s.name));
         if (!hit) continue;
       }
       const row = document.createElement("div");
       row.className = "msg-row" + (msg.id === state.selectedMsgId ? " active" : "");
       row.innerHTML = `
-        <div class="r1"><span class="id">${hexId(msg.id)}${msg.isExtended ? " (ext)" : ""}</span><span class="name">${escapeHtml(msg.name)}</span><span class="n">${msg.signals.length} sig</span></div>
-        <div class="r2">DLC ${msg.dlc}${msg.sender ? " · " + escapeHtml(msg.sender) : " · (no sender)"}</div>`;
+        <span class="body">
+          <div class="name">${escapeHtml(msg.name)}</div>
+          <div class="sub"><span>${hexId(msg.id)}${msg.isExtended ? " (ext)" : ""}</span></div>
+          ${msg.sender ? `<div class="src">${escapeHtml(msg.sender)}</div>` : ""}
+        </span>
+        <span class="count">${msg.signals.length}</span>
+        <span class="freqbar"></span>`;
       row.onclick = () => { state.selectedMsgId = msg.id; state.openSignal = null; renderMessageList(); renderDetail(); };
       wrap.appendChild(row);
     }
@@ -3645,6 +3556,13 @@
 
     for (const sig of msg.signals) sigList.appendChild(buildSignalCard(msg, sig));
 
+    // renderDetail() rebuilds #detail's whole subtree from scratch every time (innerHTML reset
+    // above), which drops the scroll position back to 0 — instead of leaving it there, re-align
+    // the open card (if any) to the top of #detail, so expanding a signal further down the list
+    // scrolls it fully into view rather than jumping back to the top of the message form.
+    const openCard = sigList.querySelector(".sig-card.open");
+    if (openCard) openCard.scrollIntoView({ block: "start", inline: "nearest" });
+
     el("addSigBtn").addEventListener("click", () => {
       const name = el("newSigName").value.trim().replace(/\s+/g, "_");
       if (!name) return;
@@ -3865,10 +3783,14 @@
   /* ---------- load / save / new ---------- */
   function loadDbcFile(file) {
     const reader = new FileReader();
+    // read once at open time — the checkbox is a "how should the NEXT open behave" setting, not
+    // tied to this particular file, so opening via the Open button or the empty-state click both
+    // respect it the same way since they both funnel through here.
+    const readOnly = el("dbeReadOnlyCheck").checked;
     reader.onload = () => {
       try {
         const model = parseDBC(reader.result);
-        openModel(model, file.name);
+        openModel(model, file.name, readOnly);
       } catch (e) {
         alert("Couldn't parse this file as a DBC: " + e.message);
       }
@@ -3880,24 +3802,11 @@
   el("fileInput").addEventListener("change", () => { if (el("fileInput").files.length) loadDbcFile(el("fileInput").files[0]); el("fileInput").value = ""; });
   el("newBtn").addEventListener("click", () => {
     if (state.model && state.dirty && !confirm("Discard unsaved changes and start a new DBC?")) return;
-    openModel(emptyModel(), "new.dbc");
+    el("dbeReadOnlyCheck").checked = false; // a brand-new DBC is always editable — uncheck so the box reflects that
+    openModel(emptyModel(), "new.dbc", false);
   });
 
-  const dropzone = el("dropzone");
-  ["dragenter", "dragover"].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("drag"); }));
-  ["dragleave", "drop"].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove("drag"); }));
-  dropzone.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) loadDbcFile(e.dataTransfer.files[0]); });
-  dropzone.addEventListener("click", () => el("fileInput").click());
-  // Page-wide drag/drop convenience (drop a .dbc anywhere, not just on the dropzone) — gated to
-  // only fire while the DBC Edit tab is actually the one showing, since document.body is shared
-  // with the trace/graphs/dbc-view tabs and their own drop handling.
-  function dbcEditTabActive() { return !el("dbcEditPane").classList.contains("tab-hidden"); }
-  document.body.addEventListener("dragover", (e) => { if (state.model && dbcEditTabActive()) e.preventDefault(); });
-  document.body.addEventListener("drop", (e) => {
-    if (!state.model || !dbcEditTabActive()) return;
-    e.preventDefault();
-    if (e.dataTransfer.files.length) loadDbcFile(e.dataTransfer.files[0]);
-  });
+  el("dbeEmptyState").addEventListener("click", () => el("fileInput").click());
 
   async function saveModel() {
     const text = serializeDBC(state.model);

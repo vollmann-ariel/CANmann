@@ -35,6 +35,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Per-signal value tables (`VAL_`) with raw-value range validation tied to the signal's own bit width.
 - Vector/J1939 attributes (`BA_`/`BA_DEF_`) on messages, signals, and nodes, with hover hints for common CNH/J1939 attribute names.
 - Save writes a `.dbc` file (Windows-1252 encoded) via the native file picker where supported, or a download otherwise.
+- Check "Read-only" before opening a file to browse it without risking any edit — every field is disabled and Save is hidden.
 
 ## Supported file formats
 
