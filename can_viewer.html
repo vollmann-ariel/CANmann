@@ -461,6 +461,149 @@
   .chart-readout-dropline { height: 2px; margin: 2px 4px; border-radius: 1px; background: var(--accent); }
   .chart-lane.flash { animation: flashLane 900ms ease-out; }
   @keyframes flashLane { 0% { background: var(--accent-soft-2); } 100% { background: transparent; } }
+
+  /* =========================================================
+   * DBC Edit tab — ported from dbc_editor.html. Every selector below is scoped under
+   * .dbe-scope (applied to #dbeToolbarNav, #dbeRailBlocksWrap, and #dbcEditPane) so it can
+   * reuse dbc_editor.html's original class names verbatim without colliding with identically-
+   * named classes elsewhere in this file (.msg-row, .msg-search, .dropzone, .empty-hint, etc.
+   * all exist in both apps with different rules).
+   * ========================================================= */
+  .dbe-scope input, .dbe-scope select, .dbe-scope textarea, .dbe-scope button { font: inherit; color: inherit; }
+  .dbe-scope input, .dbe-scope select, .dbe-scope textarea {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; color: var(--ink);
+    padding: 5px 7px;
+  }
+  .dbe-scope input:focus, .dbe-scope select:focus, .dbe-scope textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .dbe-scope button { cursor: pointer; }
+  .dbe-scope .btn {
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); border-radius: 6px;
+    padding: 6px 11px; font-size: 12px; font-weight: 600;
+  }
+  .dbe-scope .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .dbe-scope .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .dbe-scope .btn.primary:hover { opacity: .9; color: var(--accent-ink); }
+  .dbe-scope .btn.danger:hover { border-color: var(--critical); color: var(--critical); }
+  .dbe-scope .btn.small { padding: 3px 8px; font-size: 11px; }
+  .dbe-scope .iconx {
+    border: none; background: none; color: var(--ink-faint); cursor: pointer; padding: 2px 5px; border-radius: 4px; font-size: 13px;
+  }
+  .dbe-scope .iconx:hover { color: var(--critical); background: var(--surface-2); }
+
+  .dbe-scope .dirty-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--critical); display: none; }
+  .dbe-scope .dirty-dot.on { display: inline-block; }
+  .dbe-scope .fname { margin-left: auto; font-size: 11.5px; color: var(--ink-dim); font-family: Consolas, monospace; }
+
+  .dbe-rail-wrap { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+  .dbe-scope .rail-block { border-bottom: 1px solid var(--border); display: flex; flex-direction: column; }
+  .dbe-scope .rail-block.grow { flex: 1 1 auto; transition: flex-grow .2s ease; }
+  /* Collapsed, a "grow" block must stop competing for leftover space — otherwise it keeps
+     flex-grow:1 while showing only its header, and the invisible rest of its box shoves the
+     blocks below it down toward the bottom of the rail instead of letting them sit right under it. */
+  .dbe-scope .rail-block.grow.collapsed { flex: 0 0 auto; }
+  /* min-height:0 must NOT apply while collapsed, or the header row loses its automatic minimum
+     size and gets crushed by the "grow" block's flex demand (same mechanic as the rest of this file). */
+  .dbe-scope .rail-block:not(.collapsed) { min-height: 0; }
+  .dbe-scope .rail-block h2 {
+    margin: 0; padding: 9px 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--ink-faint); font-weight: 700; display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none; flex: 0 0 auto;
+  }
+  .dbe-scope .rail-block h2:hover { color: var(--ink); }
+  .dbe-scope .rail-block .chev { transition: transform .12s; opacity: .7; }
+  .dbe-scope .rail-block.collapsed .chev { transform: rotate(-90deg); }
+  /* max-height/opacity transition (JS pins scrollHeight before animating, same trick as
+     can_viewer.html's own .block-body — see setRailBlockCollapsed) instead of an instant
+     display:none, so this accordion opens/closes at the same speed as the default rail blocks. */
+  .dbe-scope .rail-block .body { padding: 0 12px 12px; overflow-y: auto; min-height: 0; transition: max-height .2s ease, opacity .15s ease; opacity: 1; }
+  .dbe-scope .rail-block.collapsed .body { max-height: 0; opacity: 0; }
+  .dbe-scope .rail-block.grow .body { flex: 1 1 auto; }
+
+  .dbe-scope .msg-search { width: 100%; margin-bottom: 8px; }
+  .dbe-scope .msg-row {
+    display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
+  }
+  .dbe-scope .msg-row:hover { background: var(--surface-2); }
+  .dbe-scope .msg-row.active { background: var(--accent-soft-2); }
+  .dbe-scope .msg-row .r1 { display: flex; gap: 6px; align-items: baseline; }
+  .dbe-scope .msg-row .id { font-family: Consolas, monospace; font-size: 10.5px; color: var(--ink-faint); flex: 0 0 auto; }
+  .dbe-scope .msg-row .name { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dbe-scope .msg-row .n { margin-left: auto; font-size: 10px; color: var(--ink-faint); flex: 0 0 auto; }
+  .dbe-scope .msg-row .r2 { font-size: 10px; color: var(--ink-faint); }
+  .dbe-scope .add-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: flex-end; }
+  .dbe-scope .add-row input { flex: 1 1 auto; min-width: 0; }
+  .dbe-scope .add-field { display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; }
+  .dbe-scope .add-field label { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; cursor: help; border-bottom: 1px dotted var(--ink-faint); width: fit-content; }
+  .dbe-scope .add-field input { flex: 0 0 auto; }
+
+  .dbe-scope .node-row, .dbe-scope .vtable-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; }
+  .dbe-scope .node-row input, .dbe-scope .vtable-row input { flex: 1 1 auto; min-width: 0; }
+
+  .dbe-scope .detail { flex: 1 1 auto; overflow-y: auto; padding: 18px 22px; min-height: 0; }
+  .dbe-scope .empty-hint { color: var(--ink-faint); font-size: 13px; padding: 40px 0; text-align: center; }
+
+  .dbe-scope .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  .dbe-scope .card h3 {
+    margin: 0 0 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dbe-scope .field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .dbe-scope .msg-field-grid { grid-template-columns: 1fr 1.5fr 1fr 1fr 1fr; }
+  .dbe-scope .field { display: flex; flex-direction: column; gap: 3px; }
+  .dbe-scope .field label { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; }
+  .dbe-scope .field label[title], .dbe-scope table.kv td.attr-name[title] { cursor: help; border-bottom: 1px dotted var(--ink-faint); width: fit-content; }
+  .dbe-scope .field.wide { grid-column: 1 / -1; }
+  .dbe-scope .checkfield { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dbe-scope .checkfield input { width: auto; }
+
+  .dbe-scope .ms-select { position: relative; }
+  .dbe-scope .ms-trigger {
+    width: 100%; text-align: left; padding: 5px 7px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dbe-scope .ms-trigger:hover { border-color: var(--accent); }
+  .dbe-scope .ms-trigger.placeholder { color: var(--ink-faint); }
+  .dbe-scope .ms-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 100%; width: max-content; max-width: 320px;
+    max-height: 220px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: var(--shadow); padding: 5px;
+  }
+  .dbe-scope .ms-panel label { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 4px; font-size: 12.5px; cursor: pointer; }
+  .dbe-scope .ms-panel label:hover { background: var(--surface-2); }
+  .dbe-scope .ms-panel label input { width: auto; }
+  .dbe-scope .ms-empty { padding: 5px 6px; font-size: 12px; color: var(--ink-faint); }
+
+  .dbe-scope .sig-list { display: flex; flex-direction: column; gap: 6px; }
+  .dbe-scope .sig-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .dbe-scope .sig-head {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; background: var(--surface-2);
+  }
+  .dbe-scope .sig-head .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); flex: 0 0 auto; }
+  .dbe-scope .sig-head .sname { font-weight: 700; font-size: 12px; flex: 0 0 auto; }
+  .dbe-scope .sig-head .smeta { font-size: 10.5px; color: var(--ink-faint); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dbe-scope .sig-head .chev { transition: transform .12s; opacity: .6; flex: 0 0 auto; }
+  .dbe-scope .sig-card.open .sig-head .chev { transform: rotate(90deg); }
+  .dbe-scope .sig-body { padding: 12px; display: none; }
+  .dbe-scope .sig-card.open .sig-body { display: block; }
+  .dbe-scope .sig-body .field-grid { margin-bottom: 12px; }
+
+  .dbe-scope .subhead { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); margin: 10px 0 6px; }
+  .dbe-scope table.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .dbe-scope table.kv th { text-align: left; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; padding: 3px 6px; }
+  .dbe-scope table.kv td { padding: 3px 6px; border-top: 1px solid var(--border); }
+  .dbe-scope table.kv input { width: 100%; }
+  .dbe-scope .kv-add { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+  .dbe-scope .kv-add select { flex: 0 0 auto; }
+  .dbe-scope .kv-add input { flex: 1 1 auto; min-width: 0; }
+
+  .dbcedit-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); min-height: 0; }
+  .dbe-scope .dropzone {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    color: var(--ink-faint); text-align: center; padding: 40px; cursor: pointer;
+  }
+  .dbe-scope .dropzone.drag { color: var(--accent); }
 </style>
 
 <div class="app">
@@ -475,7 +618,16 @@
     <nav class="tabbar">
       <button type="button" class="tab-btn" id="tabTrazaBtn">Trace</button>
       <button type="button" class="tab-btn active" id="tabGraficasBtn">Graphs</button>
-      <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC</button>
+      <button type="button" class="tab-btn" id="tabDbcDefsBtn">DBC View</button>
+      <button type="button" class="tab-btn" id="tabDbcEditBtn">DBC Edit</button>
+    </nav>
+    <nav class="tabbar dbe-scope tab-dbcedit tab-hidden" id="dbeToolbarNav">
+      <button type="button" class="btn" id="newBtn">New</button>
+      <button type="button" class="btn" id="openBtn">Open .dbc</button>
+      <input type="file" id="fileInput" accept=".dbc" hidden />
+      <button type="button" class="btn primary" id="saveBtn" disabled>Save as .dbc</button>
+      <span class="dirty-dot" id="dirtyDot" title="Unsaved changes"></span>
+      <span class="fname" id="fnameLabel"></span>
     </nav>
     <div class="stats-strip" id="statsStrip"></div>
     <div class="layout-toggles" role="group" aria-label="Toggle panels">
@@ -517,6 +669,7 @@
 
   <div class="workspace" id="workspace">
     <aside class="rail rail-left">
+    <div id="defaultRailBlocksWrap" style="display:contents">
       <section class="block collapsed" data-block="dbc">
         <h2><span>1 · DBC Files</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body">
@@ -563,6 +716,42 @@
           <div class="msg-list-wrap" id="varList"></div>
         </div>
       </section>
+    </div>
+
+    <div id="dbeRailBlocksWrap" class="dbe-scope dbe-rail-wrap tab-dbcedit tab-hidden" style="display:none">
+      <section class="rail-block grow" data-block="dbeMessages">
+        <h2><span id="msgCountLabel">Messages</span><span class="chev">▾</span></h2>
+        <div class="body">
+          <input class="msg-search" id="dbeMsgSearch" placeholder="Search by name, ID, or signal…" />
+          <div class="add-row">
+            <input id="newMsgId" placeholder="ID (hex, e.g. 0x18FEF100)" style="max-width:170px" title="The CAN identifier for this message: 11-bit standard, or 29-bit if Extended is checked (typical for J1939/PGN-based IDs)." />
+            <input id="newMsgName" placeholder="New message name" title="Message name — must be unique in the file, used as its identifier throughout the DBC." />
+            <button class="btn small" id="addMsgBtn">+ Add</button>
+          </div>
+          <div id="dbeMsgList"></div>
+        </div>
+      </section>
+      <section class="rail-block collapsed" data-block="dbeNodes">
+        <h2><span>Nodes (BU_)</span><span class="chev">▾</span></h2>
+        <div class="body">
+          <div class="add-row">
+            <input id="newNodeName" placeholder="New node name" title="Name of a bus node/ECU (BU_) — used as the Sender on messages and as a Receiver on signals." />
+            <button class="btn small" id="addNodeBtn">+ Add</button>
+          </div>
+          <div id="nodeList"></div>
+        </div>
+      </section>
+      <section class="rail-block collapsed" data-block="dbeVtables">
+        <h2><span>Value tables (VAL_TABLE_)</span><span class="chev">▾</span></h2>
+        <div class="body">
+          <div class="add-row">
+            <input id="newVTableName" placeholder="New table name" title="Name of a shared value table (VAL_TABLE_) you can copy into any signal's own value table." />
+            <button class="btn small" id="addVTableBtn">+ Add</button>
+          </div>
+          <div id="vtableList"></div>
+        </div>
+      </section>
+    </div>
     </aside>
 
     <main class="trace-pane tab-traza tab-hidden">
@@ -663,6 +852,16 @@
         <div class="sig-empty">Select a message to see its full definition.</div>
       </div>
     </aside>
+
+    <main class="dbcedit-pane dbe-scope tab-dbcedit tab-hidden" id="dbcEditPane">
+      <div class="dropzone" id="dropzone">
+        <div style="font-size:15px;font-weight:700">Open or drop a .dbc file to start editing</div>
+        <div style="font-size:12px">…or click "New" above to create one from scratch.</div>
+      </div>
+      <div class="detail" id="detail" style="display:none">
+        <div class="empty-hint">Pick a message on the left, or add a new one.</div>
+      </div>
+    </main>
   </div>
 </div>
 
@@ -919,7 +1118,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.8.0";
+  const APP_VERSION = "2.9.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2530,10 +2729,19 @@
     el("tabTrazaBtn").classList.toggle("active", tab === "traza");
     el("tabGraficasBtn").classList.toggle("active", tab === "graficas");
     el("tabDbcDefsBtn").classList.toggle("active", tab === "dbcdefs");
+    el("tabDbcEditBtn").classList.toggle("active", tab === "dbcedit");
     setMessagesVariationsLocked(tab === "dbcdefs");
     document.querySelectorAll(".tab-traza").forEach((n) => n.classList.toggle("tab-hidden", tab !== "traza"));
     document.querySelectorAll(".tab-graficas").forEach((n) => n.classList.toggle("tab-hidden", tab !== "graficas"));
     document.querySelectorAll(".tab-dbcdefs").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcdefs"));
+    document.querySelectorAll(".tab-dbcedit").forEach((n) => n.classList.toggle("tab-hidden", tab !== "dbcedit"));
+    // DBC Edit takes over the whole left rail for its own message/node/value-table accordion
+    // (see #dbeRailBlocksWrap), so the normal DBC/Log/Bus-assignment/Messages/Most-Active blocks
+    // hide completely there instead of just locking like they do for the DBC View tab above.
+    el("defaultRailBlocksWrap").classList.toggle("tab-hidden", tab === "dbcedit");
+    // stats-strip reflects the loaded trace (message count/duration/decoded%), which is irrelevant
+    // while editing a DBC — and the DBC Edit toolbar nav needs that header space for itself anyway.
+    el("statsStrip").classList.toggle("tab-hidden", tab === "dbcedit");
     renderMessageList();
     if (tab === "traza") {
       // el viewport puede haber quedado oculto (clientHeight 0) mientras se filtraba/seleccionaba en otra pestaña:
@@ -2599,6 +2807,7 @@
   el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
   el("tabGraficasBtn").addEventListener("click", () => setTab("graficas"));
   el("tabDbcDefsBtn").addEventListener("click", () => setTab("dbcdefs"));
+  el("tabDbcEditBtn").addEventListener("click", () => setTab("dbcedit"));
   el("dbcDefsSearch").addEventListener("input", renderDbcDefsList);
   el("chartResetZoomBtn").addEventListener("click", () => {
     if (state.chart.fullRange) { state.chart.range = { ...state.chart.fullRange }; requestRedraw(); }
@@ -2628,5 +2837,1097 @@
   updateResultCount();
   loadStoredChannelDbcs();
   checkForUpdate();
+})();
+
+/* =========================================================
+ * DBC Edit tab — ported from dbc_editor.html (kept as its own self-contained IIFE with its
+ * own `state`/`el`/`escapeHtml`/etc. so nothing here can collide with the trace-viewer code
+ * above; the only two id renames from the original standalone file are msgSearch→dbeMsgSearch
+ * and msgList→dbeMsgList, since can_viewer.html's own Messages Seen panel already used those.
+ * This document (state.model below) is entirely independent of the DBC files loaded for
+ * decoding in Trace/Graphs/DBC View — New/Open/Save here never touch those.
+ * ========================================================= */
+(function () {
+  "use strict";
+
+  /* =========================================================
+   * Windows-1252 encode (matches how CNH .dbc files are saved;
+   * decode is handled natively via FileReader.readAsText(file,"windows-1252"))
+   * ========================================================= */
+  const CP1252_HIGH = { // code point -> byte, for the 0x80-0x9F block where cp1252 diverges from Latin-1
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
+    0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91,
+    0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98,
+    0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F,
+  };
+  function encodeWindows1252(str) {
+    const bytes = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      const cp = str.charCodeAt(i);
+      if (cp <= 0xFF && !(cp >= 0x80 && cp <= 0x9F)) bytes[i] = cp;
+      else bytes[i] = CP1252_HIGH[cp] || 0x3F; // '?' for anything cp1252 can't represent
+    }
+    return bytes;
+  }
+
+  const DEFAULT_NS_BLOCK = [
+    "\tNS_DESC_", "\tCM_", "\tBA_DEF_", "\tBA_", "\tVAL_", "\tCAT_DEF_", "\tCAT_", "\tFILTER",
+    "\tBA_DEF_DEF_", "\tEV_DATA_", "\tENVVAR_DATA_", "\tSGTYPE_", "\tSGTYPE_VAL_", "\tBA_DEF_SGTYPE_",
+    "\tBA_SGTYPE_", "\tSIG_TYPE_REF_", "\tVAL_TABLE_", "\tSIG_GROUP_", "\tSIG_VALTYPE_", "\tSIGTYPE_VALTYPE_",
+    "\tBO_TX_BU_", "\tBA_DEF_REL_", "\tBA_REL_", "\tBA_DEF_DEF_REL_", "\tBU_SG_REL_", "\tBU_EV_REL_", "\tBU_BO_REL_", "\tSG_MUL_VAL_",
+  ].join("\n");
+
+  /* =========================================================
+   * Hints for core DBC fields and common Vector/J1939 BA_ attributes,
+   * so a user unfamiliar with the format can hover to learn what each one does.
+   * ========================================================= */
+  const FIELD_HELP = {
+    msgId: "The CAN identifier for this message: 11-bit standard, or 29-bit if Extended is checked (typical for J1939/PGN-based IDs).",
+    msgName: "Message name — must be unique in the file, used as its identifier throughout the DBC.",
+    dlc: "Data Length Code: how many bytes this message's payload uses (0–8 for classic CAN).",
+    sender: "The node (ECU) on the bus that transmits this message.",
+    extended: "Checked = 29-bit extended CAN ID (J1939-style). Unchecked = 11-bit standard ID.",
+    comment: "Free-text description, stored as a CM_ line in the DBC.",
+    sigName: "Signal name — must be unique within this message.",
+    startBit: "Bit position where this signal begins within the message payload (0 = first bit of byte 0).",
+    length: "How many bits this signal occupies.",
+    byteOrder: "Intel = little-endian (least significant byte first, most common). Motorola = big-endian (most significant byte first, common in J1939).",
+    signed: "Checked = the raw bits are interpreted as two's-complement signed. Unchecked = unsigned.",
+    factor: "Multiplier used to convert the raw bits to a physical value: physical = raw × factor + offset.",
+    offset: "Added after raw × factor to get the physical value.",
+    min: "Expected minimum physical value — informational only, does not clamp the decoded value.",
+    max: "Expected maximum physical value — informational only, does not clamp the decoded value.",
+    unit: "Physical unit shown with the value, e.g. km/h, °C, kPa, rpm.",
+    mux: "None = a plain signal. Multiplexor (M) = the selector whose value decides which multiplexed signals are active. Multiplexed (m…) = only valid when the multiplexor equals this signal's mux value.",
+    muxVal: "The value the multiplexor signal must have for this signal to be active.",
+    receivers: "Nodes that receive/use this signal — click to pick one or more from the node list (leave none checked for \"no specific receiver\").",
+    nodeName: "Name of a bus node/ECU (BU_) — used as the Sender on messages and as a Receiver on signals.",
+    vtableName: "Name of a shared value table (VAL_TABLE_) you can copy into any signal's own value table.",
+  };
+
+  // Common Vector CANdb++ / J1939 attribute names, as seen across CNH's DBC family — combined at
+  // render time with each attribute's own declared type/range/enum (always available) as a fallback
+  // for anything not covered here.
+  const ATTR_HELP = {
+    BusType: "Physical bus type of this database, e.g. CAN.",
+    ProtocolType: "Higher-level protocol used on the bus, e.g. J1939.",
+    DatabaseVersion: "Free-text version tag for this DBC file.",
+    Baudrate: "Bus speed in bit/s, e.g. 250000.",
+    Part_Number: "Part number of the database/harness this DBC describes.",
+    DBName: "Internal name of the database.",
+    Manufacturer: "Database author/OEM.",
+    GenMsgCycleTime: "How often this message is sent cyclically, in milliseconds. 0 = not cyclic.",
+    GenMsgCycleTimeFast: "Faster cycle time used during an initial \"fast start\" burst, in milliseconds.",
+    GenMsgFastOnStart: "Duration of the fast-cycle burst on startup, in milliseconds.",
+    GenMsgDelayTime: "Delay before this message starts sending, in milliseconds.",
+    GenMsgStartDelayTime: "Delay after bus wake-up before this message starts sending, in milliseconds.",
+    GenMsgSendType: "How the message is triggered: cyclic, cyclicIfActive, on event, etc.",
+    GenMsgRequestable: "Whether this message can be requested on demand (1) or not (0).",
+    GenMsgNrOfRepetition: "How many times to repeat an on-event message.",
+    GenMsgILSupport: "Whether Interaction Layer (network management) support is required for this message.",
+    GenMsgAutoGenSnd: "Whether the send code for this message is auto-generated by the tool.",
+    GenMsgAutoGenDsp: "Whether the display/decode code for this message is auto-generated by the tool.",
+    PGN: "J1939 Parameter Group Number this message carries.",
+    PGN_Definition: "Free-text description of the PGN.",
+    VFrameFormat: "CAN frame format: StandardCAN (11-bit), ExtendedCAN (29-bit), or J1939PG.",
+    TpJ1939VarDlc: "Whether this J1939 transport-protocol message uses a variable DLC.",
+    SingleFrame: "Whether the message always fits in a single CAN frame (no multi-packet transport needed).",
+    CI_AliveTimeout: "How long without receiving this message before it's considered \"not alive\", in milliseconds.",
+    Msg_Comment: "Additional free-text comment for the message (separate from the standard DBC comment).",
+    External_Reference: "Reference to an external spec/document for this message.",
+    DiagRequest: "Marks this message as a diagnostic request.",
+    DiagResponse: "Marks this message as a diagnostic response.",
+    DiagState: "Marks this message as a diagnostic state report.",
+    DiagUUDTResponse: "Marks this message as an unsolicited diagnostic response.",
+    DiagConnection: "Diagnostic connection this message belongs to.",
+    SPN: "J1939 Suspect Parameter Number identifying this signal.",
+    SPN_Definition: "Free-text description of the SPN.",
+    DDI: "ISOBUS Data Dictionary Identifier for this signal.",
+    GenSigStartValue: "Raw value the signal is initialized to before any real data is received.",
+    GenSigInactiveValue: "Raw value that means \"inactive/not used\" for this signal.",
+    GenSigTimeoutTime: "How long without an update before this signal's value is considered stale, in milliseconds.",
+    GenSigSendType: "When the signal's containing message is sent relative to this signal: Cyclic, OnWrite, OnChange, etc.",
+    GenSigILSupport: "Whether Interaction Layer support is required for this signal.",
+    GenSigAutoGenSnd: "Whether the send code for this signal is auto-generated by the tool.",
+    GenSigAutoGenDsp: "Whether the display/decode code for this signal is auto-generated by the tool.",
+    SigType: "Signal category: Default, Range, ASCII, Discrete, Control, ReferencePGN, DTC, etc.",
+    UtilizationOnNetwork: "Whether this signal is actually used on the network, or just reserved/unused.",
+    CI_FullName: "Full human-readable name of the signal (the SG_ name itself is often abbreviated).",
+    CI_ParId: "Calibration parameter identifier linked to this signal.",
+    CI_ParVersion: "Version of the calibration parameter definition.",
+    CI_SLOT_Name: "ISOBUS SLOT name associated with this signal.",
+    External_Reference_decod: "Reference to an external spec/document for decoding this signal.",
+    NmStationAddress: "J1939/NM source address of this node on the bus.",
+    NmJ1939AAC: "Whether this node supports Address Arbitrary Capable (can self-select its address).",
+    NmJ1939ECUInstance: "J1939 NAME field: ECU instance number.",
+    NmJ1939Function: "J1939 NAME field: function performed by this node.",
+    NmJ1939FunctionInstance: "J1939 NAME field: function instance number.",
+    NmJ1939IdentityNumber: "J1939 NAME field: unique identity number of this node.",
+    NmJ1939IndustryGroup: "J1939 NAME field: industry group (e.g. agricultural/forestry equipment).",
+    NmJ1939ManufacturerCode: "J1939 NAME field: manufacturer code (SAE-assigned).",
+    NmJ1939System: "J1939 NAME field: system this node belongs to.",
+    NmJ1939SystemInstance: "J1939 NAME field: system instance number.",
+    ECU: "Short internal name of the physical ECU this node represents.",
+    NodeLayerModules: "Interaction-layer software modules used by this node.",
+    Part_Number_ECU: "Part number of the physical ECU.",
+    IsOBDrelevant: "Whether this node is relevant to OBD diagnostics.",
+    ILUsed: "Whether Interaction Layer (network management) is used by this node.",
+    NodeOnNetworkConfiguration: "Whether this node is a Base (always present) or Optional network member.",
+  };
+  // Same attribute set real CNH DBC files declare via BA_DEF_ — seeded into brand-new DBCs too,
+  // so "Add" has something to offer even before any file has ever been loaded.
+  const DEFAULT_ATTR_DEFS = [
+    { name: "BusType", objType: null, dataType: "STRING" },
+    { name: "ProtocolType", objType: null, dataType: "STRING" },
+    { name: "DatabaseVersion", objType: null, dataType: "STRING" },
+    { name: "Baudrate", objType: null, dataType: "INT", min: 0, max: 1000000 },
+    { name: "Part_Number", objType: null, dataType: "STRING" },
+    { name: "DBName", objType: null, dataType: "STRING" },
+    { name: "Manufacturer", objType: null, dataType: "STRING" },
+    { name: "GenMsgCycleTime", objType: "BO_", dataType: "INT", min: 0, max: 3600000 },
+    { name: "GenMsgCycleTimeFast", objType: "BO_", dataType: "INT", min: 0, max: 3600000 },
+    { name: "GenMsgFastOnStart", objType: "BO_", dataType: "INT", min: 0, max: 100000 },
+    { name: "GenMsgDelayTime", objType: "BO_", dataType: "INT", min: 0, max: 1000 },
+    { name: "GenMsgStartDelayTime", objType: "BO_", dataType: "INT", min: 0, max: 100000 },
+    { name: "GenMsgSendType", objType: "BO_", dataType: "ENUM", enumValues: ["cyclic", "reserved", "cyclicIfActive", "on event", "reserved", "reserved", "reserved", "reserved", "noMsgSendType"] },
+    { name: "GenMsgRequestable", objType: "BO_", dataType: "INT", min: 0, max: 1 },
+    { name: "GenMsgNrOfRepetition", objType: "BO_", dataType: "INT", min: 0, max: 1000000 },
+    { name: "GenMsgILSupport", objType: "BO_", dataType: "ENUM", enumValues: ["Yes", "No"] },
+    { name: "GenMsgAutoGenSnd", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "GenMsgAutoGenDsp", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "PGN", objType: "BO_", dataType: "INT", min: 0, max: 65535 },
+    { name: "PGN_Definition", objType: "BO_", dataType: "STRING" },
+    { name: "VFrameFormat", objType: "BO_", dataType: "ENUM", enumValues: ["StandardCAN", "ExtendedCAN", "reserved", "J1939PG"] },
+    { name: "TpJ1939VarDlc", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "SingleFrame", objType: "BO_", dataType: "INT", min: 0, max: 1 },
+    { name: "CI_AliveTimeout", objType: "BO_", dataType: "INT", min: 0, max: 3600000 },
+    { name: "Msg_Comment", objType: "BO_", dataType: "STRING" },
+    { name: "External_Reference", objType: "BO_", dataType: "STRING" },
+    { name: "DiagRequest", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "DiagResponse", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "DiagState", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "DiagUUDTResponse", objType: "BO_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "DiagConnection", objType: "BO_", dataType: "INT", min: 0, max: 65535 },
+    { name: "SPN", objType: "SG_", dataType: "INT", min: 0, max: 524287 },
+    { name: "SPN_Definition", objType: "SG_", dataType: "STRING" },
+    { name: "DDI", objType: "SG_", dataType: "INT", min: 0, max: 65535 },
+    { name: "GenSigStartValue", objType: "SG_", dataType: "INT", min: 0, max: 10000 },
+    { name: "GenSigInactiveValue", objType: "SG_", dataType: "INT", min: 0, max: 2147483647 },
+    { name: "GenSigTimeoutTime", objType: "SG_", dataType: "INT", min: 0, max: 3600000 },
+    { name: "GenSigSendType", objType: "SG_", dataType: "ENUM", enumValues: ["Cyclic", "OnWrite", "reserved", "OnChange", "reserved", "reserved", "reserved", "NoSigSendType"] },
+    { name: "GenSigILSupport", objType: "SG_", dataType: "ENUM", enumValues: ["Yes", "No"] },
+    { name: "GenSigAutoGenSnd", objType: "SG_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "GenSigAutoGenDsp", objType: "SG_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "SigType", objType: "SG_", dataType: "ENUM", enumValues: ["Default", "Range", "RangeSigned", "ASCII", "Discrete", "Control", "ReferencePGN", "DTC", "StringDelimiter", "StringLength", "StringLengthControl"] },
+    { name: "UtilizationOnNetwork", objType: "SG_", dataType: "ENUM", enumValues: ["Used", "NOT USED"] },
+    { name: "CI_FullName", objType: "SG_", dataType: "STRING" },
+    { name: "CI_ParId", objType: "SG_", dataType: "STRING" },
+    { name: "CI_ParVersion", objType: "SG_", dataType: "STRING" },
+    { name: "CI_SLOT_Name", objType: "SG_", dataType: "STRING" },
+    { name: "External_Reference_decod", objType: "SG_", dataType: "STRING" },
+    { name: "NmStationAddress", objType: "BU_", dataType: "INT", min: 0, max: 255 },
+    { name: "NmJ1939AAC", objType: "BU_", dataType: "INT", min: 0, max: 1 },
+    { name: "NmJ1939ECUInstance", objType: "BU_", dataType: "INT", min: 0, max: 7 },
+    { name: "NmJ1939Function", objType: "BU_", dataType: "INT", min: 0, max: 255 },
+    { name: "NmJ1939FunctionInstance", objType: "BU_", dataType: "INT", min: 0, max: 31 },
+    { name: "NmJ1939IdentityNumber", objType: "BU_", dataType: "INT", min: 0, max: 2097151 },
+    { name: "NmJ1939IndustryGroup", objType: "BU_", dataType: "INT", min: 0, max: 7 },
+    { name: "NmJ1939ManufacturerCode", objType: "BU_", dataType: "INT", min: 0, max: 2047 },
+    { name: "NmJ1939System", objType: "BU_", dataType: "INT", min: 0, max: 127 },
+    { name: "NmJ1939SystemInstance", objType: "BU_", dataType: "INT", min: 0, max: 15 },
+    { name: "ECU", objType: "BU_", dataType: "STRING" },
+    { name: "NodeLayerModules", objType: "BU_", dataType: "STRING" },
+    { name: "Part_Number_ECU", objType: "BU_", dataType: "STRING" },
+    { name: "IsOBDrelevant", objType: "BU_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "ILUsed", objType: "BU_", dataType: "ENUM", enumValues: ["No", "Yes"] },
+    { name: "NodeOnNetworkConfiguration", objType: "BU_", dataType: "ENUM", enumValues: ["Base", "Optional"] },
+  ];
+
+  function attrHintText(def) {
+    const known = def ? ATTR_HELP[def.name] : null;
+    let typeInfo = "";
+    if (def) {
+      if (def.dataType === "ENUM") typeInfo = "Options: " + (def.enumValues || []).join(", ");
+      else if (def.dataType === "STRING") typeInfo = "Free text";
+      else typeInfo = def.dataType + " range " + def.min + "–" + def.max;
+    }
+    return [known, typeInfo].filter(Boolean).join(" — ") || "No further info available for this attribute.";
+  }
+
+  /* =========================================================
+   * Parse
+   * ========================================================= */
+  function emptyModel() {
+    return {
+      version: "", nsRaw: DEFAULT_NS_BLOCK, bsRaw: "",
+      nodes: [], nodeComments: new Map(), nodeAttrs: new Map(),
+      valueTables: new Map(), // tableName -> [{raw,label}]
+      messages: [],
+      attrDefs: DEFAULT_ATTR_DEFS.map((d) => ({ ...d })), attrDefaults: new Map(), globalAttrs: new Map(),
+      sigMulValRaw: [],
+    };
+  }
+
+  function parsePairs(raw) {
+    return [...raw.matchAll(/(-?\d+)\s+"([^"]*)"/g)].map((m) => ({ raw: parseInt(m[1], 10), label: m[2] }));
+  }
+
+  function parseBADefLine(line) {
+    const m = /^BA_DEF_\s+(?:(BU_|BO_|SG_|EV_)\s+)?"([^"]+)"\s+(INT|FLOAT|HEX|STRING|ENUM)\s*(.*);\s*$/.exec(line.trim());
+    if (!m) return null;
+    const [, objType, name, dataType, paramsRaw] = m;
+    const def = { name, objType: objType || null, dataType };
+    if (dataType === "ENUM") def.enumValues = [...paramsRaw.matchAll(/"([^"]*)"/g)].map((mm) => mm[1]);
+    else if (dataType !== "STRING") {
+      const nums = paramsRaw.trim().split(/\s+/).map(Number);
+      def.min = nums[0]; def.max = nums[1];
+    }
+    return def;
+  }
+  function parseBADefDefLine(line) {
+    const m = /^BA_DEF_DEF_\s+"([^"]+)"\s+(.*);\s*$/.exec(line.trim());
+    if (!m) return null;
+    const raw = m[2].trim();
+    const qm = /^"([^"]*)"$/.exec(raw);
+    return { name: m[1], value: qm ? qm[1] : parseFloat(raw) };
+  }
+  function parseBALine(line) {
+    const m = /^BA_\s+"([^"]+)"\s*(.*);\s*$/.exec(line.trim());
+    if (!m) return null;
+    const attrName = m[1];
+    let rest = m[2].trim(), objType = null, objId = null, sigName = null;
+    const tm = /^(BU_|BO_|SG_|EV_)\s+(.*)$/.exec(rest);
+    if (tm) {
+      objType = tm[1]; rest = tm[2];
+      if (objType === "BO_") { const im = /^(-?\d+)\s+(.*)$/.exec(rest); if (!im) return null; objId = parseInt(im[1], 10); rest = im[2]; }
+      else if (objType === "SG_") { const im = /^(-?\d+)\s+(\S+)\s+(.*)$/.exec(rest); if (!im) return null; objId = parseInt(im[1], 10); sigName = im[2]; rest = im[3]; }
+      else { const im = /^(\S+)\s+(.*)$/.exec(rest); if (!im) return null; objId = im[1]; rest = im[2]; }
+    }
+    rest = rest.trim();
+    const qm = /^"([^"]*)"$/.exec(rest);
+    const value = qm ? qm[1] : parseFloat(rest);
+    return { attrName, objType, objId, sigName, value };
+  }
+
+  function parseDBC(text) {
+    const model = emptyModel();
+
+    const verM = /^VERSION\s+"([^"]*)"/m.exec(text);
+    if (verM) model.version = verM[1];
+
+    const nsM = /^NS_\s*:[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*BS_\s*:/m.exec(text);
+    if (nsM) model.nsRaw = nsM[1].replace(/\r/g, "");
+
+    const bsM = /^BS_\s*:\s*(.*)$/m.exec(text);
+    if (bsM) model.bsRaw = bsM[1].trim();
+
+    const buM = /^BU_\s*:\s*(.*)$/m.exec(text);
+    if (buM) model.nodes = buM[1].trim().split(/\s+/).filter(Boolean);
+
+    let m;
+    const vtRe = /^VAL_TABLE_\s+(\S+)\s+([\s\S]*?);/gm;
+    while ((m = vtRe.exec(text))) model.valueTables.set(m[1], parsePairs(m[2]));
+
+    const cmBuRe = /^CM_\s+BU_\s+(\S+)\s+"([^"]*)"\s*;/gm;
+    while ((m = cmBuRe.exec(text))) model.nodeComments.set(m[1], m[2]);
+    const msgComments = new Map();
+    const cmBoRe = /^CM_\s+BO_\s+(\d+)\s+"([^"]*)"\s*;/gm;
+    while ((m = cmBoRe.exec(text))) msgComments.set(parseInt(m[1], 10) & 0x1fffffff, m[2]);
+    const sigComments = new Map();
+    const cmSgRe = /^CM_\s+SG_\s+(\d+)\s+(\S+)\s+"([^"]*)"\s*;/gm;
+    while ((m = cmSgRe.exec(text))) sigComments.set((parseInt(m[1], 10) & 0x1fffffff) + "::" + m[2], m[3]);
+
+    const lines = text.split(/\r?\n/);
+    const boRe = /^BO_\s+(\d+)\s+([\w-]+)\s*:\s*(\d+)\s+(\S+)/;
+    const sgRe = /^\s*SG_\s+([\w-]+)\s*(M|m\d+)?\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]*)\|([^\]]*)\]\s*"([^"]*)"\s*(.*)$/;
+    let cur = null;
+    for (const line of lines) {
+      const bm = boRe.exec(line);
+      if (bm) {
+        const rawId = parseInt(bm[1], 10);
+        const id = rawId & 0x1fffffff;
+        cur = {
+          id, isExtended: (rawId & 0x80000000) !== 0, name: bm[2], dlc: parseInt(bm[3], 10), sender: bm[4],
+          comment: msgComments.get(id) || "", attrs: new Map(), signals: [],
+        };
+        model.messages.push(cur);
+        continue;
+      }
+      if (!cur) continue;
+      const sm = sgRe.exec(line);
+      if (!sm) continue;
+      const [, name, muxRaw, startBit, length, order, sign, factor, offset, min, max, unit, receiversRaw] = sm;
+      cur.signals.push({
+        name, isMultiplexor: muxRaw === "M", muxValue: muxRaw && muxRaw[0] === "m" ? parseInt(muxRaw.slice(1), 10) : null,
+        startBit: parseInt(startBit, 10), length: parseInt(length, 10),
+        byteOrder: order === "1" ? "intel" : "motorola", signed: sign === "-",
+        factor: parseFloat(factor), offset: parseFloat(offset), min: parseFloat(min), max: parseFloat(max),
+        unit, receivers: receiversRaw.split(",").map((s) => s.trim()).filter(Boolean),
+        comment: sigComments.get(cur.id + "::" + name) || "", valueTable: null, attrs: new Map(),
+      });
+    }
+
+    const msgById = new Map(model.messages.map((mm) => [mm.id, mm]));
+
+    const valRe = /^VAL_\s+(\d+)\s+(\S+)\s+([\s\S]*?);/gm;
+    while ((m = valRe.exec(text))) {
+      const msg = msgById.get(parseInt(m[1], 10) & 0x1fffffff);
+      const sig = msg && msg.signals.find((s) => s.name === m[2]);
+      if (sig) sig.valueTable = parsePairs(m[3]);
+    }
+
+    for (const line of lines) {
+      const t = line.trim();
+      if (t.startsWith("SG_MUL_VAL_")) { model.sigMulValRaw.push(t); continue; }
+      if (t.startsWith("BA_DEF_DEF_")) {
+        const d = parseBADefDefLine(t);
+        if (d) model.attrDefaults.set(d.name, d.value);
+        continue;
+      }
+      if (t.startsWith("BA_DEF_")) {
+        const d = parseBADefLine(t);
+        if (d) model.attrDefs.push(d);
+        continue;
+      }
+      if (t.startsWith("BA_ ")) {
+        const a = parseBALine(t);
+        if (!a) continue;
+        if (!a.objType) { model.globalAttrs.set(a.attrName, a.value); continue; }
+        if (a.objType === "BU_") {
+          if (!model.nodeAttrs.has(a.objId)) model.nodeAttrs.set(a.objId, new Map());
+          model.nodeAttrs.get(a.objId).set(a.attrName, a.value);
+        } else if (a.objType === "BO_") {
+          const msg = msgById.get(a.objId & 0x1fffffff);
+          if (msg) msg.attrs.set(a.attrName, a.value);
+        } else if (a.objType === "SG_") {
+          const msg = msgById.get(a.objId & 0x1fffffff);
+          const sig = msg && msg.signals.find((s) => s.name === a.sigName);
+          if (sig) sig.attrs.set(a.attrName, a.value);
+        }
+      }
+    }
+    return model;
+  }
+
+  /* =========================================================
+   * Serialize
+   * ========================================================= */
+  function fmtAttrVal(v) { return typeof v === "string" ? `"${v}"` : String(v); }
+
+  function serializeDBC(model) {
+    const L = [];
+    L.push(`VERSION "${model.version || ""}"`, "", "NS_ :", model.nsRaw || DEFAULT_NS_BLOCK, "");
+    L.push("BS_:" + (model.bsRaw ? " " + model.bsRaw : ""), "");
+    L.push("BU_: " + model.nodes.join(" "), "");
+
+    for (const [name, pairs] of model.valueTables) {
+      L.push(`VAL_TABLE_ ${name} ${pairs.map((p) => `${p.raw} "${p.label}"`).join(" ")} ;`);
+    }
+    if (model.valueTables.size) L.push("");
+
+    for (const msg of model.messages) {
+      const rawId = msg.isExtended ? (msg.id | 0x80000000) >>> 0 : msg.id;
+      L.push(`BO_ ${rawId} ${msg.name}: ${msg.dlc} ${msg.sender || "Vector__XXX"}`);
+      for (const sig of msg.signals) {
+        const mux = sig.isMultiplexor ? "M " : sig.muxValue !== null ? "m" + sig.muxValue + " " : "";
+        const recv = sig.receivers.length ? sig.receivers.join(",") : "Vector__XXX";
+        L.push(` SG_ ${sig.name} ${mux}: ${sig.startBit}|${sig.length}@${sig.byteOrder === "intel" ? 1 : 0}${sig.signed ? "-" : "+"} (${sig.factor},${sig.offset}) [${sig.min}|${sig.max}] "${sig.unit}" ${recv}`);
+      }
+      L.push("");
+    }
+
+    for (const [name, c] of model.nodeComments) if (c) L.push(`CM_ BU_ ${name} "${c}";`);
+    for (const msg of model.messages) {
+      const rawId = msg.isExtended ? (msg.id | 0x80000000) >>> 0 : msg.id;
+      if (msg.comment) L.push(`CM_ BO_ ${rawId} "${msg.comment}";`);
+      for (const sig of msg.signals) if (sig.comment) L.push(`CM_ SG_ ${rawId} ${sig.name} "${sig.comment}";`);
+    }
+    L.push("");
+
+    for (const def of model.attrDefs) {
+      const objPart = def.objType ? def.objType + "  " : " ";
+      let params;
+      if (def.dataType === "ENUM") params = " " + def.enumValues.map((v) => `"${v}"`).join(",");
+      else if (def.dataType === "STRING") params = " ";
+      else params = ` ${def.min} ${def.max}`;
+      L.push(`BA_DEF_ ${objPart}"${def.name}" ${def.dataType}${params};`);
+    }
+    L.push("");
+    for (const def of model.attrDefs) {
+      if (!model.attrDefaults.has(def.name)) continue;
+      L.push(`BA_DEF_DEF_  "${def.name}" ${fmtAttrVal(model.attrDefaults.get(def.name))};`);
+    }
+    L.push("");
+
+    for (const [name, v] of model.globalAttrs) L.push(`BA_ "${name}" ${fmtAttrVal(v)};`);
+    for (const [nodeName, attrs] of model.nodeAttrs) for (const [name, v] of attrs) L.push(`BA_ "${name}" BU_ ${nodeName} ${fmtAttrVal(v)};`);
+    for (const msg of model.messages) {
+      const rawId = msg.isExtended ? (msg.id | 0x80000000) >>> 0 : msg.id;
+      for (const [name, v] of msg.attrs) L.push(`BA_ "${name}" BO_ ${rawId} ${fmtAttrVal(v)};`);
+      for (const sig of msg.signals) for (const [name, v] of sig.attrs) L.push(`BA_ "${name}" SG_ ${rawId} ${sig.name} ${fmtAttrVal(v)};`);
+    }
+    L.push("");
+
+    for (const msg of model.messages) {
+      const rawId = msg.isExtended ? (msg.id | 0x80000000) >>> 0 : msg.id;
+      for (const sig of msg.signals) {
+        if (sig.valueTable && sig.valueTable.length) {
+          L.push(`VAL_ ${rawId} ${sig.name} ${sig.valueTable.map((p) => `${p.raw} "${p.label}"`).join(" ")} ;`);
+        }
+      }
+    }
+    L.push("");
+    for (const raw of model.sigMulValRaw) L.push(raw);
+    return L.join("\n") + "\n";
+  }
+
+  /* =========================================================
+   * State & boot
+   * ========================================================= */
+  const el = (id) => document.getElementById(id);
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const state = { model: null, fileName: "new.dbc", selectedMsgId: null, openSignal: null, dirty: false };
+
+  function markDirty() { state.dirty = true; el("dirtyDot").classList.add("on"); }
+  function markClean() { state.dirty = false; el("dirtyDot").classList.remove("on"); }
+
+  function hexId(id) { return "0x" + id.toString(16).toUpperCase(); }
+  function parseIdInput(v) {
+    v = v.trim();
+    if (/^0x/i.test(v)) return parseInt(v, 16);
+    return parseInt(v, 10);
+  }
+  function nextFreeId(model) {
+    let id = 0x100;
+    const used = new Set(model.messages.map((m) => m.id));
+    while (used.has(id)) id++;
+    return id;
+  }
+
+  function openModel(model, fileName) {
+    state.model = model;
+    state.fileName = fileName;
+    state.selectedMsgId = null;
+    state.openSignal = null;
+    markClean();
+    el("fnameLabel").textContent = fileName;
+    el("saveBtn").disabled = false;
+    el("dbeRailBlocksWrap").style.display = "flex";
+    el("detail").style.display = "block";
+    el("dropzone").style.display = "none";
+    renderAll();
+  }
+
+  function renderAll() {
+    renderMessageList();
+    renderNodeList();
+    renderVTableList();
+    renderDetail();
+  }
+
+  /* ---------- message list ---------- */
+  function renderMessageList() {
+    const wrap = el("dbeMsgList");
+    const q = (el("dbeMsgSearch").value || "").trim().toLowerCase();
+    const model = state.model;
+    el("msgCountLabel").textContent = `Messages (${model.messages.length})`;
+    wrap.innerHTML = "";
+    for (const msg of model.messages) {
+      if (q) {
+        const hit = msg.name.toLowerCase().includes(q) || hexId(msg.id).toLowerCase().includes(q) ||
+          msg.signals.some((s) => s.name.toLowerCase().includes(q));
+        if (!hit) continue;
+      }
+      const row = document.createElement("div");
+      row.className = "msg-row" + (msg.id === state.selectedMsgId ? " active" : "");
+      row.innerHTML = `
+        <div class="r1"><span class="id">${hexId(msg.id)}${msg.isExtended ? " (ext)" : ""}</span><span class="name">${escapeHtml(msg.name)}</span><span class="n">${msg.signals.length} sig</span></div>
+        <div class="r2">DLC ${msg.dlc}${msg.sender ? " · " + escapeHtml(msg.sender) : " · (no sender)"}</div>`;
+      row.onclick = () => { state.selectedMsgId = msg.id; state.openSignal = null; renderMessageList(); renderDetail(); };
+      wrap.appendChild(row);
+    }
+  }
+
+  el("dbeMsgSearch").addEventListener("input", renderMessageList);
+
+  el("addMsgBtn").addEventListener("click", () => {
+    const model = state.model;
+    const idInput = el("newMsgId").value.trim();
+    const id = idInput ? parseIdInput(idInput) : nextFreeId(model);
+    if (!Number.isFinite(id) || id < 0) { alert("Invalid ID"); return; }
+    if (model.messages.some((m) => m.id === id)) { alert("A message with that ID already exists"); return; }
+    const name = (el("newMsgName").value.trim() || "NewMessage_" + hexId(id)).replace(/\s+/g, "_");
+    if (model.messages.some((m) => m.name === name)) { alert(`A message named "${name}" already exists`); return; }
+    // Sender starts blank on purpose: pre-filling it with a node name makes the browser's native
+    // datalist dropdown filter down to just that one match instead of showing every node to pick from.
+    const msg = { id, isExtended: id > 0x7FF, name, dlc: 8, sender: "", comment: "", attrs: new Map(), signals: [] };
+    model.messages.push(msg);
+    el("newMsgId").value = ""; el("newMsgName").value = "";
+    markDirty();
+    state.selectedMsgId = id;
+    renderMessageList();
+    renderDetail();
+  });
+
+  /* ---------- nodes panel ---------- */
+  function renderNodeList() {
+    ensureNodesDatalist(); // keep the Sender/Receivers autocomplete in sync with the node list itself
+    const wrap = el("nodeList");
+    wrap.innerHTML = "";
+    const model = state.model;
+    for (const name of model.nodes) {
+      const row = document.createElement("div");
+      row.className = "node-row";
+      row.innerHTML = `<input value="${escapeHtml(name)}" /><input placeholder="comment" value="${escapeHtml(model.nodeComments.get(name) || "")}" style="flex:1.4 1 0" /><button class="iconx" title="Remove">✕</button>`;
+      const [nameInput, commentInput] = row.querySelectorAll("input");
+      nameInput.addEventListener("change", () => {
+        const newName = nameInput.value.trim();
+        if (!newName || newName === name) { nameInput.value = name; return; }
+        renameNode(name, newName);
+        markDirty();
+        renderAll();
+      });
+      commentInput.addEventListener("input", () => { model.nodeComments.set(name, commentInput.value); markDirty(); });
+      row.querySelector(".iconx").onclick = () => {
+        model.nodes = model.nodes.filter((n) => n !== name);
+        model.nodeComments.delete(name);
+        model.nodeAttrs.delete(name);
+        markDirty();
+        renderAll();
+      };
+      wrap.appendChild(row);
+    }
+  }
+  function renameNode(oldName, newName) {
+    const model = state.model;
+    model.nodes = model.nodes.map((n) => (n === oldName ? newName : n));
+    if (model.nodeComments.has(oldName)) { model.nodeComments.set(newName, model.nodeComments.get(oldName)); model.nodeComments.delete(oldName); }
+    if (model.nodeAttrs.has(oldName)) { model.nodeAttrs.set(newName, model.nodeAttrs.get(oldName)); model.nodeAttrs.delete(oldName); }
+    for (const msg of model.messages) {
+      if (msg.sender === oldName) msg.sender = newName;
+      for (const sig of msg.signals) sig.receivers = sig.receivers.map((r) => (r === oldName ? newName : r));
+    }
+  }
+  el("addNodeBtn").addEventListener("click", () => {
+    const name = el("newNodeName").value.trim().replace(/\s+/g, "_");
+    if (!name) return;
+    if (state.model.nodes.includes(name)) { alert("Node already exists"); return; }
+    state.model.nodes.push(name);
+    el("newNodeName").value = "";
+    markDirty();
+    renderNodeList();
+  });
+
+  /* ---------- value tables panel ---------- */
+  function renderVTableList() {
+    const wrap = el("vtableList");
+    wrap.innerHTML = "";
+    const model = state.model;
+    for (const [name, pairs] of model.valueTables) {
+      const box = document.createElement("div");
+      box.style.marginBottom = "10px";
+      const head = document.createElement("div");
+      head.style.cssText = "display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px;margin-bottom:4px";
+      head.innerHTML = `<span>${escapeHtml(name)}</span><span style="color:var(--ink-faint);font-weight:400">(${pairs.length})</span><button class="iconx" style="margin-left:auto" title="Remove table">✕</button>`;
+      head.querySelector(".iconx").onclick = () => { model.valueTables.delete(name); markDirty(); renderVTableList(); };
+      box.appendChild(head);
+      for (const p of pairs) {
+        const row = document.createElement("div");
+        row.className = "vtable-row";
+        row.innerHTML = `<input type="number" value="${p.raw}" style="max-width:70px" /><input value="${escapeHtml(p.label)}" /><button class="iconx" title="Remove">✕</button>`;
+        const [rawInput, labelInput] = row.querySelectorAll("input");
+        rawInput.addEventListener("change", () => { const v = parseInt(rawInput.value, 10); if (Number.isFinite(v)) { p.raw = v; markDirty(); } });
+        labelInput.addEventListener("input", () => { p.label = labelInput.value; markDirty(); });
+        row.querySelector(".iconx").onclick = () => { const i = pairs.indexOf(p); pairs.splice(i, 1); markDirty(); renderVTableList(); };
+        box.appendChild(row);
+      }
+      const addBtn = document.createElement("button");
+      addBtn.className = "btn small"; addBtn.textContent = "+ entry";
+      addBtn.onclick = () => { pairs.push({ raw: pairs.length, label: "" }); markDirty(); renderVTableList(); };
+      box.appendChild(addBtn);
+      wrap.appendChild(box);
+    }
+  }
+  el("addVTableBtn").addEventListener("click", () => {
+    const name = el("newVTableName").value.trim().replace(/\s+/g, "_");
+    if (!name) return;
+    if (state.model.valueTables.has(name)) { alert("Table already exists"); return; }
+    state.model.valueTables.set(name, []);
+    el("newVTableName").value = "";
+    markDirty();
+    renderVTableList();
+  });
+
+  /* ---------- collapsible rail blocks (accordion: only one open at a time) ----------
+   * Same animate-to-measured-height technique as can_viewer.html's own .block/.block-body
+   * accordion (setBlockCollapsed/expandOnlyRailBlock) — a bare max-height:0/none CSS toggle
+   * can't animate since browsers can't interpolate to/from "none", so collapse pins the
+   * current scrollHeight then animates to 0, and expand animates up to the measured height
+   * before releasing it back to "none" so content can still grow/shrink freely once open. */
+  function setRailBlockCollapsed(block, collapsed) {
+    if (block.classList.contains("collapsed") === collapsed) return;
+    const body = block.querySelector(".body");
+    if (block.classList.contains("grow")) {
+      // sized by the .rail-block.grow flex-grow transition (CSS) — no height to measure
+      block.classList.toggle("collapsed", collapsed);
+      return;
+    }
+    if (collapsed) {
+      body.style.maxHeight = body.scrollHeight + "px"; // pin current height so the shrink can animate from it
+      requestAnimationFrame(() => { body.style.maxHeight = "0px"; });
+    } else {
+      body.style.maxHeight = body.scrollHeight + "px";
+      body.addEventListener("transitionend", function onEnd(e) {
+        if (e.propertyName !== "max-height") return;
+        body.style.maxHeight = "none"; // let it grow/shrink freely once open (content can change while expanded)
+        body.removeEventListener("transitionend", onEnd);
+      });
+    }
+    block.classList.toggle("collapsed", collapsed);
+  }
+  document.querySelectorAll(".rail-block h2").forEach((h2) => {
+    h2.addEventListener("click", () => {
+      const block = h2.closest(".rail-block");
+      if (block.classList.contains("collapsed")) {
+        block.closest(".rail-left").querySelectorAll(".rail-block").forEach((b) => { if (b !== block) setRailBlockCollapsed(b, true); });
+        setRailBlockCollapsed(block, false);
+      } else {
+        setRailBlockCollapsed(block, true);
+      }
+    });
+  });
+
+  /* ---------- generic attribute (BA_) editor, reused for messages, signals, nodes ---------- */
+  function renderAttrsEditor(container, attrsMap, objType, onChange) {
+    container.innerHTML = "";
+    const table = document.createElement("table");
+    table.className = "kv";
+    table.innerHTML = "<tr><th>Attribute</th><th>Value</th><th></th></tr>";
+    for (const [name, value] of attrsMap) {
+      const def = state.model.attrDefs.find((d) => d.name === name && d.objType === objType);
+      const tr = document.createElement("tr");
+      const valTd = document.createElement("td");
+      valTd.appendChild(buildAttrValueInput(def, value, (v) => { attrsMap.set(name, v); markDirty(); onChange && onChange(); }));
+      tr.innerHTML = `<td class="attr-name" title="${escapeHtml(attrHintText(def))}">${escapeHtml(name)}</td>`;
+      tr.appendChild(valTd);
+      const rmTd = document.createElement("td");
+      const rmBtn = document.createElement("button"); rmBtn.className = "iconx"; rmBtn.textContent = "✕";
+      rmBtn.onclick = () => { attrsMap.delete(name); markDirty(); renderAttrsEditor(container, attrsMap, objType, onChange); onChange && onChange(); };
+      rmTd.appendChild(rmBtn);
+      tr.appendChild(rmTd);
+      table.appendChild(tr);
+    }
+    container.appendChild(table);
+
+    const available = state.model.attrDefs.filter((d) => d.objType === objType && !attrsMap.has(d.name));
+    if (available.length) {
+      const addRow = document.createElement("div");
+      addRow.className = "kv-add";
+      const sel = document.createElement("select");
+      sel.title = "Pick an attribute, then hover its name in the table for details";
+      for (const d of available) { const o = document.createElement("option"); o.value = d.name; o.textContent = d.name; o.title = attrHintText(d); sel.appendChild(o); }
+      const addBtn = document.createElement("button");
+      addBtn.className = "btn small"; addBtn.textContent = "+ Add";
+      addBtn.onclick = () => {
+        const def = available.find((d) => d.name === sel.value);
+        const def2 = def || null;
+        const defaultVal = state.model.attrDefaults.has(sel.value) ? state.model.attrDefaults.get(sel.value) : (def2 && def2.dataType === "STRING" ? "" : 0);
+        attrsMap.set(sel.value, defaultVal);
+        markDirty();
+        renderAttrsEditor(container, attrsMap, objType, onChange);
+        onChange && onChange();
+      };
+      addRow.appendChild(sel);
+      addRow.appendChild(addBtn);
+      container.appendChild(addRow);
+    }
+  }
+  function buildAttrValueInput(def, value, onChange) {
+    if (def && def.dataType === "ENUM") {
+      const sel = document.createElement("select");
+      const opts = def.enumValues || [];
+      opts.forEach((label, idx) => { const o = document.createElement("option"); o.value = idx; o.textContent = label; sel.appendChild(o); });
+      sel.value = typeof value === "number" ? value : opts.indexOf(value);
+      sel.addEventListener("change", () => onChange(parseInt(sel.value, 10)));
+      return sel;
+    }
+    const inp = document.createElement("input");
+    inp.value = value;
+    if (def && (def.dataType === "INT" || def.dataType === "FLOAT" || def.dataType === "HEX")) {
+      inp.type = "number";
+      inp.addEventListener("change", () => onChange(parseFloat(inp.value) || 0));
+    } else {
+      inp.addEventListener("input", () => onChange(inp.value));
+    }
+    return inp;
+  }
+
+  /* ---------- message / signal detail ---------- */
+  function renderDetail() {
+    const wrap = el("detail");
+    const model = state.model;
+    const msg = model.messages.find((m) => m.id === state.selectedMsgId);
+    if (!msg) { wrap.innerHTML = '<div class="empty-hint">Pick a message on the left, or add a new one.</div>'; return; }
+    wrap.innerHTML = "";
+
+    const msgCard = document.createElement("div");
+    msgCard.className = "card";
+    msgCard.innerHTML = `<h3><span>Message</span><button class="btn small danger" id="delMsgBtn">Delete message</button></h3>`;
+    const grid = document.createElement("div");
+    grid.className = "field-grid msg-field-grid";
+    grid.innerHTML = `
+      <div class="field"><label title="${escapeHtml(FIELD_HELP.msgId)}">ID (hex)</label><input id="fMsgId" value="${hexId(msg.id)}" /></div>
+      <div class="field"><label title="${escapeHtml(FIELD_HELP.msgName)}">Name</label><input id="fMsgName" value="${escapeHtml(msg.name)}" /></div>
+      <div class="field"><label title="${escapeHtml(FIELD_HELP.dlc)}">DLC (bytes)</label><input id="fMsgDlc" type="number" min="0" max="64" value="${msg.dlc}" /></div>
+      <div class="field"><label title="${escapeHtml(FIELD_HELP.sender)}">Sender</label><input id="fMsgSender" list="nodesDatalist" placeholder="Pick a node…" value="${escapeHtml(msg.sender)}" /></div>
+      <div class="field checkfield" style="align-self:end"><input type="checkbox" id="fMsgExt" ${msg.isExtended ? "checked" : ""} /><label style="text-transform:none;font-size:12px" for="fMsgExt" title="${escapeHtml(FIELD_HELP.extended)}">Extended (29-bit) ID</label></div>
+      <div class="field wide"><label title="${escapeHtml(FIELD_HELP.comment)}">Comment</label><textarea id="fMsgComment" rows="2">${escapeHtml(msg.comment)}</textarea></div>`;
+    msgCard.appendChild(grid);
+    const msgAttrsDiv = document.createElement("div");
+    msgAttrsDiv.innerHTML = '<div class="subhead">Attributes (BA_)</div>';
+    const msgAttrsBody = document.createElement("div");
+    msgAttrsDiv.appendChild(msgAttrsBody);
+    msgCard.appendChild(msgAttrsDiv);
+    wrap.appendChild(msgCard);
+    renderAttrsEditor(msgAttrsBody, msg.attrs, "BO_");
+
+    el("fMsgId").addEventListener("change", () => {
+      const id = parseIdInput(el("fMsgId").value);
+      if (!Number.isFinite(id) || id < 0) { el("fMsgId").value = hexId(msg.id); return; }
+      if (id !== msg.id && model.messages.some((m) => m.id === id)) { alert("Another message already uses that ID"); el("fMsgId").value = hexId(msg.id); return; }
+      msg.id = id; state.selectedMsgId = id; markDirty(); renderMessageList();
+    });
+    let lastValidMsgName = msg.name;
+    el("fMsgName").addEventListener("input", () => { msg.name = el("fMsgName").value; markDirty(); renderMessageList(); });
+    el("fMsgName").addEventListener("change", () => {
+      const name = el("fMsgName").value.trim().replace(/\s+/g, "_");
+      if (!name || model.messages.some((m) => m !== msg && m.name === name)) {
+        msg.name = lastValidMsgName; el("fMsgName").value = lastValidMsgName; markDirty(); renderMessageList();
+        return;
+      }
+      lastValidMsgName = name; msg.name = name; el("fMsgName").value = name; markDirty(); renderMessageList();
+    });
+    el("fMsgDlc").addEventListener("change", () => { const v = parseInt(el("fMsgDlc").value, 10); if (Number.isFinite(v) && v >= 0) { msg.dlc = v; markDirty(); renderMessageList(); } });
+    el("fMsgSender").addEventListener("input", () => { msg.sender = el("fMsgSender").value; markDirty(); renderMessageList(); });
+    el("fMsgExt").addEventListener("change", () => { msg.isExtended = el("fMsgExt").checked; markDirty(); renderMessageList(); });
+    el("fMsgComment").addEventListener("input", () => { msg.comment = el("fMsgComment").value; markDirty(); });
+    el("delMsgBtn").addEventListener("click", () => {
+      if (!confirm(`Delete message "${msg.name}" and its ${msg.signals.length} signal(s)?`)) return;
+      model.messages = model.messages.filter((m) => m.id !== msg.id);
+      state.selectedMsgId = null;
+      markDirty();
+      renderMessageList();
+      renderDetail();
+    });
+
+    const sigCard = document.createElement("div");
+    sigCard.className = "card";
+    sigCard.innerHTML = `<h3><span>Signals (${msg.signals.length})</span></h3>`;
+    const addSigRow = document.createElement("div");
+    addSigRow.className = "add-row";
+    addSigRow.innerHTML = `<input id="newSigName" placeholder="New signal name" title="${escapeHtml(FIELD_HELP.sigName)}" />
+      <div class="add-field"><label title="${escapeHtml(FIELD_HELP.startBit)}">Start bit</label><input id="newSigStart" type="number" style="max-width:100px" value="0" title="${escapeHtml(FIELD_HELP.startBit)}" /></div>
+      <div class="add-field"><label title="${escapeHtml(FIELD_HELP.length)}">Length</label><input id="newSigLen" type="number" style="max-width:90px" value="8" title="${escapeHtml(FIELD_HELP.length)}" /></div>
+      <button class="btn small" id="addSigBtn">+ Add</button>`;
+    sigCard.appendChild(addSigRow);
+
+    const sigList = document.createElement("div");
+    sigList.className = "sig-list";
+    sigCard.appendChild(sigList);
+    wrap.appendChild(sigCard);
+
+    for (const sig of msg.signals) sigList.appendChild(buildSignalCard(msg, sig));
+
+    el("addSigBtn").addEventListener("click", () => {
+      const name = el("newSigName").value.trim().replace(/\s+/g, "_");
+      if (!name) return;
+      if (msg.signals.some((s) => s.name === name)) { alert("Signal already exists in this message"); return; }
+      const startBit = parseInt(el("newSigStart").value, 10) || 0;
+      const length = parseInt(el("newSigLen").value, 10) || 1;
+      msg.signals.push({
+        name, isMultiplexor: false, muxValue: null, startBit, length, byteOrder: "intel", signed: false,
+        factor: 1, offset: 0, min: 0, max: Math.pow(2, length) - 1, unit: "", receivers: [], comment: "",
+        valueTable: null, attrs: new Map(),
+      });
+      el("newSigName").value = ""; el("newSigStart").value = "0"; el("newSigLen").value = "8";
+      markDirty();
+      state.openSignal = name;
+      renderMessageList();
+      renderDetail();
+    });
+  }
+
+  function buildSignalCard(msg, sig) {
+    const card = document.createElement("div");
+    card.className = "sig-card" + (state.openSignal === sig.name ? " open" : "");
+    const head = document.createElement("div");
+    head.className = "sig-head";
+    head.innerHTML = `<span class="swatch"></span><span class="sname">${escapeHtml(sig.name)}</span>
+      <span class="smeta">bit ${sig.startBit}, ${sig.length}b, ${sig.byteOrder === "intel" ? "Intel" : "Motorola"}${sig.signed ? ", signed" : ""}${sig.unit ? " · " + escapeHtml(sig.unit) : ""}${sig.isMultiplexor ? " · mux selector" : sig.muxValue !== null ? " · mux=" + sig.muxValue : ""}</span>
+      <button class="iconx" title="Remove signal">✕</button><span class="chev">▸</span>`;
+    head.querySelector(".iconx").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete signal "${sig.name}"?`)) return;
+      msg.signals = msg.signals.filter((s) => s !== sig);
+      markDirty();
+      renderMessageList();
+      renderDetail();
+    });
+    head.addEventListener("click", (e) => {
+      if (e.target.closest(".iconx")) return;
+      state.openSignal = state.openSignal === sig.name ? null : sig.name;
+      renderDetail();
+    });
+    card.appendChild(head);
+
+    const body = document.createElement("div");
+    body.className = "sig-body";
+    if (state.openSignal === sig.name) buildSignalBody(body, msg, sig);
+    card.appendChild(body);
+    return card;
+  }
+
+  function buildSignalBody(body, msg, sig) {
+    const uid = "s" + Math.random().toString(36).slice(2, 8);
+    const be = (id) => body.querySelector("#" + id); // body isn't attached to document yet — getElementById can't see into it
+    body.innerHTML = `
+      <div class="field-grid">
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.sigName)}">Name</label><input id="${uid}name" value="${escapeHtml(sig.name)}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.startBit)}">Start bit</label><input id="${uid}start" type="number" min="0" max="63" value="${sig.startBit}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.length)}">Length (bits)</label><input id="${uid}len" type="number" min="1" max="64" value="${sig.length}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.byteOrder)}">Byte order</label>
+          <select id="${uid}order"><option value="intel" ${sig.byteOrder === "intel" ? "selected" : ""}>Intel (little-endian)</option><option value="motorola" ${sig.byteOrder === "motorola" ? "selected" : ""}>Motorola (big-endian)</option></select>
+        </div>
+        <div class="field checkfield" style="align-self:end"><input type="checkbox" id="${uid}signed" ${sig.signed ? "checked" : ""} /><label style="text-transform:none;font-size:12px" for="${uid}signed" title="${escapeHtml(FIELD_HELP.signed)}">Signed</label></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.factor)}">Factor</label><input id="${uid}factor" type="number" step="any" value="${sig.factor}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.offset)}">Offset</label><input id="${uid}offset" type="number" step="any" value="${sig.offset}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.min)}">Min</label><input id="${uid}min" type="number" step="any" value="${sig.min}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.max)}">Max</label><input id="${uid}max" type="number" step="any" value="${sig.max}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.unit)}">Unit</label><input id="${uid}unit" value="${escapeHtml(sig.unit)}" /></div>
+        <div class="field"><label title="${escapeHtml(FIELD_HELP.mux)}">Multiplexing</label>
+          <select id="${uid}mux"><option value="none" ${!sig.isMultiplexor && sig.muxValue === null ? "selected" : ""}>None</option>
+            <option value="M" ${sig.isMultiplexor ? "selected" : ""}>Multiplexor (M)</option>
+            <option value="m" ${!sig.isMultiplexor && sig.muxValue !== null ? "selected" : ""}>Multiplexed (m…)</option></select>
+        </div>
+        <div class="field" id="${uid}muxValWrap" style="${sig.muxValue !== null ? "" : "display:none"}"><label title="${escapeHtml(FIELD_HELP.muxVal)}">Mux value</label><input id="${uid}muxVal" type="number" min="0" value="${sig.muxValue || 0}" /></div>
+        <div class="field wide"><label title="${escapeHtml(FIELD_HELP.receivers)}">Receivers</label>
+          <div class="ms-select">
+            <button type="button" class="ms-trigger" id="${uid}recv"></button>
+            <div class="ms-panel" id="${uid}recvPanel" hidden></div>
+          </div>
+        </div>
+        <div class="field wide"><label title="${escapeHtml(FIELD_HELP.comment)}">Comment</label><textarea id="${uid}comment" rows="2">${escapeHtml(sig.comment)}</textarea></div>
+      </div>
+      <div class="subhead">Value table (VAL_)</div>
+      <div id="${uid}vtbody"></div>
+      <div class="subhead">Attributes (BA_)</div>
+      <div id="${uid}attrs"></div>`;
+
+    be(uid + "name").addEventListener("change", () => {
+      const name = be(uid + "name").value.trim().replace(/\s+/g, "_");
+      if (!name || (name !== sig.name && msg.signals.some((s) => s.name === name))) { be(uid + "name").value = sig.name; return; }
+      state.openSignal = name; sig.name = name; markDirty(); renderMessageList(); renderDetail();
+    });
+    be(uid + "start").addEventListener("change", () => { const v = parseInt(be(uid + "start").value, 10); if (Number.isFinite(v)) { sig.startBit = v; markDirty(); } });
+    be(uid + "len").addEventListener("change", () => {
+      const v = parseInt(be(uid + "len").value, 10);
+      if (v > 0) { sig.length = v; markDirty(); if (sig.valueTable) renderSignalValueTable(be(uid + "vtbody"), sig); }
+    });
+    be(uid + "order").addEventListener("change", () => { sig.byteOrder = be(uid + "order").value; markDirty(); });
+    be(uid + "signed").addEventListener("change", () => {
+      sig.signed = be(uid + "signed").checked; markDirty();
+      if (sig.valueTable) renderSignalValueTable(be(uid + "vtbody"), sig);
+    });
+    be(uid + "factor").addEventListener("change", () => { const v = parseFloat(be(uid + "factor").value); if (Number.isFinite(v)) { sig.factor = v; markDirty(); } });
+    be(uid + "offset").addEventListener("change", () => { const v = parseFloat(be(uid + "offset").value); if (Number.isFinite(v)) { sig.offset = v; markDirty(); } });
+    be(uid + "min").addEventListener("change", () => { const v = parseFloat(be(uid + "min").value); if (Number.isFinite(v)) { sig.min = v; markDirty(); } });
+    be(uid + "max").addEventListener("change", () => { const v = parseFloat(be(uid + "max").value); if (Number.isFinite(v)) { sig.max = v; markDirty(); } });
+    be(uid + "unit").addEventListener("input", () => { sig.unit = be(uid + "unit").value; markDirty(); renderMessageList(); });
+    be(uid + "mux").addEventListener("change", () => {
+      const v = be(uid + "mux").value;
+      sig.isMultiplexor = v === "M";
+      sig.muxValue = v === "m" ? (sig.muxValue !== null ? sig.muxValue : 0) : null;
+      markDirty();
+      renderDetail();
+    });
+    const muxValInput = be(uid + "muxVal");
+    if (muxValInput) muxValInput.addEventListener("change", () => { const v = parseInt(muxValInput.value, 10); if (Number.isFinite(v)) { sig.muxValue = v; markDirty(); } });
+    const recvTrigger = be(uid + "recv");
+    const recvPanel = be(uid + "recvPanel");
+    const renderRecvTrigger = () => {
+      recvTrigger.textContent = sig.receivers.length ? sig.receivers.join(", ") : "Select nodes…";
+      recvTrigger.classList.toggle("placeholder", !sig.receivers.length);
+    };
+    const renderRecvPanel = () => {
+      recvPanel.innerHTML = state.model.nodes.length
+        ? state.model.nodes.map((n) => `<label><input type="checkbox" value="${escapeHtml(n)}" ${sig.receivers.includes(n) ? "checked" : ""} /> ${escapeHtml(n)}</label>`).join("")
+        : `<div class="ms-empty">No nodes defined yet</div>`;
+      recvPanel.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.addEventListener("change", () => {
+          sig.receivers = cb.checked ? [...sig.receivers, cb.value] : sig.receivers.filter((r) => r !== cb.value);
+          markDirty();
+          renderRecvTrigger();
+        });
+      });
+    };
+    recvTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasOpen = !recvPanel.hidden;
+      closeAllMsPanels();
+      if (!wasOpen) { renderRecvPanel(); recvPanel.hidden = false; }
+    });
+    renderRecvTrigger();
+    be(uid + "comment").addEventListener("input", () => { sig.comment = be(uid + "comment").value; markDirty(); });
+
+    renderSignalValueTable(be(uid + "vtbody"), sig);
+    renderAttrsEditor(be(uid + "attrs"), sig.attrs, "SG_");
+  }
+
+  function rawRangeForSignal(sig) {
+    const bits = sig.length > 0 ? sig.length : 1;
+    if (sig.signed) return { min: -Math.pow(2, bits - 1), max: Math.pow(2, bits - 1) - 1 };
+    return { min: 0, max: Math.pow(2, bits) - 1 };
+  }
+
+  function renderSignalValueTable(container, sig) {
+    container.innerHTML = "";
+    const { min: rawMin, max: rawMax } = rawRangeForSignal(sig);
+    if (!sig.valueTable) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:8px;align-items:center";
+      const btn = document.createElement("button");
+      btn.className = "btn small"; btn.textContent = "+ Create value table";
+      btn.onclick = () => { sig.valueTable = []; markDirty(); renderSignalValueTable(container, sig); };
+      row.appendChild(btn);
+      if (state.model.valueTables.size) {
+        const sel = document.createElement("select");
+        const blank = document.createElement("option"); blank.textContent = "copy from named table…"; blank.value = "";
+        sel.appendChild(blank);
+        for (const name of state.model.valueTables.keys()) { const o = document.createElement("option"); o.value = name; o.textContent = name; sel.appendChild(o); }
+        sel.addEventListener("change", () => {
+          if (!sel.value) return;
+          sig.valueTable = state.model.valueTables.get(sel.value).map((p) => ({ ...p }));
+          markDirty();
+          renderSignalValueTable(container, sig);
+        });
+        row.appendChild(sel);
+      }
+      container.appendChild(row);
+      return;
+    }
+    const rangeHint = `Valid raw range for this signal (${sig.length || 1}-bit${sig.signed ? ", signed" : ""}): ${rawMin}–${rawMax}`;
+    for (const p of sig.valueTable) {
+      const row = document.createElement("div");
+      row.className = "vtable-row";
+      row.innerHTML = `<input type="number" value="${p.raw}" min="${rawMin}" max="${rawMax}" title="${escapeHtml(rangeHint)}" style="max-width:70px" /><input value="${escapeHtml(p.label)}" /><button class="iconx" title="Remove">✕</button>`;
+      const [rawInput, labelInput] = row.querySelectorAll("input");
+      rawInput.addEventListener("change", () => {
+        const v = parseInt(rawInput.value, 10);
+        if (Number.isFinite(v) && v >= rawMin && v <= rawMax) { p.raw = v; markDirty(); }
+        else rawInput.value = p.raw; // out of range for this signal's bit width — revert
+      });
+      labelInput.addEventListener("input", () => { p.label = labelInput.value; markDirty(); });
+      row.querySelector(".iconx").onclick = () => { sig.valueTable.splice(sig.valueTable.indexOf(p), 1); markDirty(); renderSignalValueTable(container, sig); };
+      container.appendChild(row);
+    }
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;gap:8px;margin-top:4px";
+    const addBtn = document.createElement("button"); addBtn.className = "btn small"; addBtn.textContent = "+ entry";
+    const usedRaws = new Set(sig.valueTable.map((p) => p.raw));
+    let nextRaw = null;
+    for (let r = rawMin; r <= rawMax; r++) { if (!usedRaws.has(r)) { nextRaw = r; break; } }
+    if (nextRaw === null) {
+      addBtn.disabled = true;
+      addBtn.title = `All ${rawMax - rawMin + 1} possible raw values (${rawMin}–${rawMax}) for this signal are already in the table.`;
+    } else {
+      addBtn.onclick = () => { sig.valueTable.push({ raw: nextRaw, label: "" }); markDirty(); renderSignalValueTable(container, sig); };
+    }
+    const rmBtn = document.createElement("button"); rmBtn.className = "btn small danger"; rmBtn.textContent = "Remove table";
+    rmBtn.onclick = () => { sig.valueTable = null; markDirty(); renderSignalValueTable(container, sig); };
+    controls.appendChild(addBtn); controls.appendChild(rmBtn);
+    container.appendChild(controls);
+  }
+
+  /* ---------- nodes datalist (shared by sender/receiver inputs) ---------- */
+  function ensureNodesDatalist() {
+    let dl = el("nodesDatalist");
+    if (!dl) { dl = document.createElement("datalist"); dl.id = "nodesDatalist"; document.body.appendChild(dl); }
+    dl.innerHTML = state.model.nodes.map((n) => `<option value="${escapeHtml(n)}">`).join("");
+  }
+
+  /* ---------- load / save / new ---------- */
+  function loadDbcFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const model = parseDBC(reader.result);
+        openModel(model, file.name);
+      } catch (e) {
+        alert("Couldn't parse this file as a DBC: " + e.message);
+      }
+    };
+    reader.readAsText(file, "windows-1252");
+  }
+
+  el("openBtn").addEventListener("click", () => el("fileInput").click());
+  el("fileInput").addEventListener("change", () => { if (el("fileInput").files.length) loadDbcFile(el("fileInput").files[0]); el("fileInput").value = ""; });
+  el("newBtn").addEventListener("click", () => {
+    if (state.model && state.dirty && !confirm("Discard unsaved changes and start a new DBC?")) return;
+    openModel(emptyModel(), "new.dbc");
+  });
+
+  const dropzone = el("dropzone");
+  ["dragenter", "dragover"].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove("drag"); }));
+  dropzone.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) loadDbcFile(e.dataTransfer.files[0]); });
+  dropzone.addEventListener("click", () => el("fileInput").click());
+  // Page-wide drag/drop convenience (drop a .dbc anywhere, not just on the dropzone) — gated to
+  // only fire while the DBC Edit tab is actually the one showing, since document.body is shared
+  // with the trace/graphs/dbc-view tabs and their own drop handling.
+  function dbcEditTabActive() { return !el("dbcEditPane").classList.contains("tab-hidden"); }
+  document.body.addEventListener("dragover", (e) => { if (state.model && dbcEditTabActive()) e.preventDefault(); });
+  document.body.addEventListener("drop", (e) => {
+    if (!state.model || !dbcEditTabActive()) return;
+    e.preventDefault();
+    if (e.dataTransfer.files.length) loadDbcFile(e.dataTransfer.files[0]);
+  });
+
+  async function saveModel() {
+    const text = serializeDBC(state.model);
+    const bytes = encodeWindows1252(text);
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          id: "dbc-editor-save", suggestedName: state.fileName,
+          types: [{ description: "DBC", accept: { "text/plain": [".dbc"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(bytes);
+        await writable.close();
+        state.fileName = handle.name;
+        el("fnameLabel").textContent = state.fileName;
+        markClean();
+      } catch (e) {
+        if (e.name !== "AbortError") alert("Save failed: " + e.message);
+      }
+    } else {
+      const blob = new Blob([bytes], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = state.fileName; a.click();
+      URL.revokeObjectURL(url);
+      markClean();
+    }
+  }
+  el("saveBtn").addEventListener("click", saveModel);
+
+  window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+  function closeAllMsPanels() {
+    document.querySelectorAll(".ms-panel").forEach((p) => { p.hidden = true; });
+  }
+  document.addEventListener("click", (e) => { if (!e.target.closest(".ms-select")) closeAllMsPanels(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAllMsPanels(); });
 })();
 </script>
