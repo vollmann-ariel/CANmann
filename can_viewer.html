@@ -118,6 +118,12 @@
   .wave { display: block; }
 
   .stats-strip { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  /* #statsStrip's margin-left:auto is what pins everything after it (layout-toggles, about-wrap)
+     to the right edge of the header. When it's hidden (DBC Edit tab), it drops out of the flex
+     layout entirely and takes that auto margin with it, so the toggles/about button collapse
+     back to sitting right after the tab nav instead of staying pinned right — hand the auto
+     margin over to layout-toggles in that case so the right edge stays anchored. */
+  #statsStrip.tab-hidden ~ .layout-toggles { margin-left: auto; }
   .layout-toggles { display: flex; gap: 4px; }
   .iconbtn.layout-toggle-btn { width: 35px; height: 35px; color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
   .iconbtn.layout-toggle-btn:hover { background: var(--accent-soft-2); }
@@ -1118,7 +1124,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "2.9.0";
+  const APP_VERSION = "2.9.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
