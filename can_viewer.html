@@ -250,6 +250,20 @@
   .msg-row .count { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; }
   .msg-row .freqbar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); opacity: .5; border-radius: 0 0 6px 6px; }
 
+  /* ---------- Context menu (Most Active row right-click) ---------- */
+  .ctx-menu {
+    display: none; position: fixed; z-index: 50; min-width: 160px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 4px; font-size: 11.5px;
+  }
+  .ctx-menu.open { display: block; }
+  .ctx-menu-item {
+    display: block; width: 100%; text-align: left; padding: 7px 10px; border-radius: 5px;
+    border: none; background: none; color: var(--ink); cursor: pointer; font-size: inherit;
+  }
+  .ctx-menu-item:hover { background: var(--surface-2); }
+  .ctx-menu-item.ctx-menu-cancel { color: var(--ink-faint); }
+
   /* ---------- Trace toolbar ---------- */
   .toolbar {
     display: flex; align-items: center; gap: 10px; padding: 8px 14px;
@@ -656,7 +670,7 @@
     </div>
     <nav class="tabbar">
       <button type="button" class="tab-btn" id="tabTrazaBtn">Trace</button>
-      <button type="button" class="tab-btn active" id="tabGraficasBtn">Graphs</button>
+      <button type="button" class="tab-btn active" id="tabGraficasBtn">Plots</button>
       <button type="button" class="tab-btn" id="tabDbcEditBtn">DBC</button>
     </nav>
     <nav class="tabbar dbe-scope tab-dbcedit tab-hidden" id="dbeToolbarNav">
@@ -891,6 +905,11 @@
       </fieldset>
     </main>
   </div>
+</div>
+
+<div class="ctx-menu" id="varCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="varCtxExplore" role="menuitem">Explore message</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="varCtxCancel" role="menuitem">Cancel</button>
 </div>
 
 <script>
@@ -1207,7 +1226,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.0.0";
+  const APP_VERSION = "5.1.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1612,9 +1631,39 @@
         <span class="count">${e.transitions.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.transitions / maxT) * 100)}%"></span>`;
       row.onclick = () => toggleSignalInChart(e.channel, e.id, e.signalName, { switchTab: true });
+      row.addEventListener("contextmenu", (ev) => { ev.preventDefault(); openVarContextMenu(ev.clientX, ev.clientY, e); });
       wrap.appendChild(row);
     }
   }
+
+  let varCtxEntry = null;
+  function openVarContextMenu(x, y, entry) {
+    varCtxEntry = entry;
+    const menu = el("varCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeVarContextMenu() {
+    varCtxEntry = null;
+    el("varCtxMenu").classList.remove("open");
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("varCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeVarContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeVarContextMenu(); });
+  el("varCtxCancel").addEventListener("click", closeVarContextMenu);
+  el("varCtxExplore").addEventListener("click", () => {
+    if (!varCtxEntry) return;
+    const name = varCtxEntry.msgName;
+    closeVarContextMenu();
+    expandOnlyRailBlock(document.querySelector('.block[data-block="messages"]'));
+    el("msgSearch").value = name;
+    renderMessageList();
+  });
 
   function renderStats() {
     const strip = el("statsStrip");
