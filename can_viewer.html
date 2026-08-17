@@ -932,6 +932,19 @@
     const pendingValType = new Map();
     while ((m = sigValTypeRe.exec(text))) pendingValType.set((parseInt(m[1], 10) & 0x1fffffff) + "::" + m[2], parseInt(m[3], 10));
 
+    // Extended/multi-value multiplexing: a signal can declare it's governed by a switch
+    // OTHER than the message's single primary "M" signal (possibly cascaded through several
+    // levels). One signal can carry more than one SG_MUL_VAL_ line.
+    const sgMulValRe = /^SG_MUL_VAL_\s+(\d+)\s+(\S+)\s+(\S+)\s+([\s\S]*?);/gm;
+    const pendingMuxSel = new Map();
+    while ((m = sgMulValRe.exec(text))) {
+      const id = parseInt(m[1], 10) & 0x1fffffff;
+      const ranges = [...m[4].matchAll(/(-?\d+)\s*-\s*(-?\d+)/g)].map((r) => [parseInt(r[1], 10), parseInt(r[2], 10)]);
+      const key = id + "::" + m[2];
+      if (!pendingMuxSel.has(key)) pendingMuxSel.set(key, []);
+      pendingMuxSel.get(key).push({ switchName: m[3], ranges });
+    }
+
     let cur = null;
     for (const line of lines) {
       if ((m = buRe.exec(line))) { nodes.push(...m[1].trim().split(/\s+/).filter(Boolean)); continue; }
@@ -961,6 +974,7 @@
           factor: parseFloat(factor), offset: parseFloat(offset), min: parseFloat(min), max: parseFloat(max),
           unit, receivers: receiversRaw.split(",").map((s) => s.trim()).filter(Boolean),
           isMultiplexor, muxValue, valueType: pendingValType.get(cur.id + "::" + name) || 0,
+          muxSel: pendingMuxSel.get(cur.id + "::" + name) || [],
           comment: pendingSgComments.get(cur.id + "::" + name) || null, valueTable: null,
         });
       }
@@ -1052,13 +1066,9 @@
     if (!msg) return null;
     const results = [];
     let muxVal = null;
-    if (msg.isMultiplexed) {
-      const muxSig = msg.signals.find((s) => s.isMultiplexor);
-      if (muxSig) muxVal = decodeSignal(data, muxSig).raw;
-    }
-    for (const sig of msg.signals) {
-      if (sig.muxValue !== null && sig.muxValue !== muxVal) continue;
-      if (!signalFitsData(sig, data)) continue;
+
+    function push(sig) {
+      if (!signalFitsData(sig, data)) return;
       const { raw, value } = decodeSignal(data, sig);
       results.push({
         name: sig.name, raw, value, unit: sig.unit,
@@ -1067,6 +1077,40 @@
         startBit: sig.startBit, length: sig.length, byteOrder: sig.byteOrder, signed: sig.signed,
       });
     }
+
+    if (!msg.isMultiplexed) {
+      for (const sig of msg.signals) push(sig);
+      return { message: msg, signals: results, muxVal };
+    }
+
+    // Cascaded/extended multiplexing: a signal's real governing switch may be a secondary
+    // switch declared via SG_MUL_VAL_ (sig.muxSel), not the message's single primary "M"
+    // signal — and that secondary switch can itself be conditioned on the primary one.
+    const byName = new Map(msg.signals.map((s) => [s.name, s]));
+    const primary = msg.signals.find((s) => s.isMultiplexor && s.muxValue === null);
+    if (primary) muxVal = decodeSignal(data, primary).raw;
+    const activeCache = new Map();
+    function isActive(sig, seen) {
+      if (activeCache.has(sig.name)) return activeCache.get(sig.name);
+      if (seen.has(sig.name)) return false; // cyclic SG_MUL_VAL_ reference guard
+      seen.add(sig.name);
+      let result;
+      if (sig.muxSel.length) {
+        result = sig.muxSel.some(({ switchName, ranges }) => {
+          const sw = byName.get(switchName);
+          if (!sw || !isActive(sw, seen)) return false;
+          const swVal = decodeSignal(data, sw).raw;
+          return ranges.some(([lo, hi]) => swVal >= lo && swVal <= hi);
+        });
+      } else if (sig.muxValue !== null) {
+        result = sig.muxValue === muxVal;
+      } else {
+        result = true;
+      }
+      activeCache.set(sig.name, result);
+      return result;
+    }
+    for (const sig of msg.signals) if (isActive(sig, new Set())) push(sig);
     return { message: msg, signals: results, muxVal };
   }
 
@@ -1163,7 +1207,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "4.0.0";
+  const APP_VERSION = "5.0.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1817,7 +1861,7 @@
         ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
       </div>`;
       if (msg.isMultiplexed) {
-        const muxSig = msg.signals.find((s) => s.isMultiplexor);
+        const muxSig = msg.signals.find((s) => s.isMultiplexor && s.muxValue === null);
         html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — showing the active signal subset</div>`;
       }
       html += '<div class="raw-bytes">' + Array.from(r.data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
