@@ -509,7 +509,10 @@
 
   .dbe-scope .dirty-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--critical); display: none; }
   .dbe-scope .dirty-dot.on { display: inline-block; }
-  .dbe-scope .fname { margin-left: auto; font-size: 11.5px; color: var(--ink-dim); font-family: Consolas, monospace; }
+  .dbe-scope .fname {
+    margin-left: 20px; font-size: 11.5px; color: var(--ink-dim); font-family: Consolas, monospace;
+    display: flex; align-items: center;
+  }
 
   .dbe-warn {
     display: flex; align-items: center; gap: 8px;
@@ -1226,7 +1229,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.1.0";
+  const APP_VERSION = "5.2.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1288,22 +1291,35 @@
     ctx.stroke();
   })();
 
-  /* ---------- persistencia de asignaciones bus -> DBC (IndexedDB) ----------
-   * Sólo se persiste el texto de los DBC efectivamente asignados a un bus (los ya leídos
-   * legítimamente). Los archivos subidos pero no asignados quedan sólo en memoria: nunca
-   * se leen, así que no hay nada válido que guardar para ellos entre sesiones. */
-  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels";
+  /* ---------- persistencia de DBCs y asignaciones bus -> DBC (IndexedDB) ----------
+   * dbc_files guarda el texto de TODO DBC alguna vez seleccionado (asignado o no), para que
+   * la lista "DBC Files" (y por lo tanto el menú BUS -> DBC Assignment) sea la misma de una
+   * apertura a la siguiente. dbc_channels guarda, aparte, qué archivo está asignado a cada
+   * bus ahora mismo. Son dos stores separados porque tienen ciclos de vida distintos: sacar
+   * un DBC de un bus (unassign) no debe hacer que se olvide el archivo en sí. */
+  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
-      const req = indexedDB.open(DBC_DB_NAME, 2);
+      const req = indexedDB.open(DBC_DB_NAME, 3);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(DBC_STORE_NAME)) db.createObjectStore(DBC_STORE_NAME, { keyPath: "channel" });
+        if (!db.objectStoreNames.contains(DBC_FILES_STORE_NAME)) db.createObjectStore(DBC_FILES_STORE_NAME, { keyPath: "fileName" });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+  }
+  function rememberDbcFile(fileName, text) {
+    openDbcStore().then((db) => {
+      db.transaction(DBC_FILES_STORE_NAME, "readwrite").objectStore(DBC_FILES_STORE_NAME).put({ fileName, text });
+    }).catch(() => {});
+  }
+  function forgetDbcFile(fileName) {
+    openDbcStore().then((db) => {
+      db.transaction(DBC_FILES_STORE_NAME, "readwrite").objectStore(DBC_FILES_STORE_NAME).delete(fileName);
+    }).catch(() => {});
   }
   function rememberChannelDbc(channel, fileName, text) {
     openDbcStore().then((db) => {
@@ -1313,6 +1329,21 @@
   function forgetChannelDbc(channel) {
     openDbcStore().then((db) => {
       db.transaction(DBC_STORE_NAME, "readwrite").objectStore(DBC_STORE_NAME).delete(channel);
+    }).catch(() => {});
+  }
+  function loadStoredDbcFiles() {
+    openDbcStore().then((db) => {
+      const req = db.transaction(DBC_FILES_STORE_NAME, "readonly").objectStore(DBC_FILES_STORE_NAME).getAll();
+      req.onsuccess = () => {
+        let added = false;
+        for (const entry of req.result) {
+          if (!state.dbcFiles.some((d) => d.fileName === entry.fileName)) {
+            state.dbcFiles.push({ fileName: entry.fileName, file: null, cachedText: entry.text });
+            added = true;
+          }
+        }
+        if (added) renderDbcList();
+      };
     }).catch(() => {});
   }
   function loadStoredChannelDbcs() {
@@ -1408,8 +1439,9 @@
   }
 
   /* ---------- DBC loading ----------
-   * Subir un archivo sólo lo registra como referencia (state.dbcFiles): nunca se lee ni
-   * se parsea hasta que el usuario lo asigna a un bus en el bloque "chanmap". Sólo el DBC
+   * Subir un archivo lo registra como referencia (state.dbcFiles) y dispara una lectura en
+   * segundo plano sólo para poder recordarlo entre sesiones (dbc_files, IndexedDB); nunca se
+   * parsea hasta que el usuario lo asigna a un bus en el bloque "chanmap". Sólo el DBC
    * asignado a un bus decodifica los mensajes de ese bus (ver findDbcForChannelId). */
   function renderDbcList() {
     const list = el("dbcList");
@@ -1422,6 +1454,7 @@
       pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(d.fileName)}</span><span class="meta">${meta}</span><button title="Remove">✕</button>`;
       pill.querySelector("button").onclick = () => {
         state.dbcFiles.splice(i, 1);
+        forgetDbcFile(d.fileName);
         for (const c of assignedTo) unassignChannel(c); // also re-renders the list
         if (assignedTo.length === 0) renderDbcList();
       };
@@ -1432,12 +1465,14 @@
 
   function registerDbcFile(file) {
     if (state.dbcFiles.some((d) => d.fileName === file.name)) return;
-    state.dbcFiles.push({ fileName: file.name, file, cachedText: undefined });
+    const entry = { fileName: file.name, file, cachedText: undefined };
+    state.dbcFiles.push(entry);
     renderDbcList();
+    withDbcText(entry, (text) => rememberDbcFile(entry.fileName, text));
   }
 
-  // Lee el texto de un archivo DBC de referencia sólo la primera vez que hace falta (al
-  // asignarlo a un bus); lo cachea para no releerlo si se reasigna a otro bus después.
+  // Lee el texto de un archivo DBC sólo la primera vez que hace falta (al registrarlo o al
+  // asignarlo a un bus, lo que ocurra primero); lo cachea para no releerlo después.
   function withDbcText(entry, cb) {
     if (entry.cachedText !== undefined) { cb(entry.cachedText); return; }
     const reader = new FileReader();
@@ -2808,6 +2843,11 @@
 
   let searchDebounce;
   el("traceSearch").addEventListener("input", () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(applyFilter, 150); });
+  // traceSearch no despliega un menú propio (filtra la tabla in-place), así que "cerrar con
+  // Escape" es lo análogo: vaciar el filtro y volver a mostrar todas las filas.
+  el("traceSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && el("traceSearch").value) { el("traceSearch").value = ""; applyFilter(); }
+  });
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
   el("varSearch").addEventListener("input", renderVarList);
@@ -2842,6 +2882,7 @@
   el("chartAddInput").addEventListener("input", renderChartAddResults);
   el("chartAddInput").addEventListener("focus", renderChartAddResults);
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") el("chartAddResults").classList.remove("open"); });
   window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
   wireChartInteraction();
 
@@ -2857,6 +2898,7 @@
   el("updateBannerClose").addEventListener("click", hideUpdateBanner);
 
   updateResultCount();
+  loadStoredDbcFiles();
   loadStoredChannelDbcs();
   checkForUpdate();
 })();
