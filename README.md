@@ -7,21 +7,21 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 ## Usage
 
 1. Open `can_viewer.html` in Chrome/Edge (needs `<input type="file">`, drag & drop, Canvas 2D).
-2. **DBC files**: load one or more `.dbc` files, one per bus. If the filename includes `CAN1`, `CAN2`, etc., the matching log channel is auto-assigned to that DBC.
+2. **DBC files**: load one or more `.dbc` files. Every file you load is remembered across sessions (IndexedDB), so it stays listed — and available in the bus dropdowns below — even after closing and reopening the app.
 3. **CAN log**: load a `.csv` (format `Timestamp,CAN_ID,DLC,Data`, the one `CANmann.py` produces) or an `.asc` (Vector ASCII).
-4. Pick the DBC for each channel under **Channel → DBC** if the automatic mapping got it wrong.
+4. Assign one DBC per bus under **Bus → DBC Assignment** — only an assigned DBC is used to decode that bus's messages.
 
 ## Trace tab
 
-- Virtualized table (handles hundreds of thousands of messages without lag), with filtering by ID/name/channel and a "decoded only" toggle.
-- Decoded signal panel when a message is selected: physical value, raw value, unit, `VAL_` table labels, multiplexing, and a warning when a multi-packet J1939 message (e.g. DM1) exceeds the 8 bytes of the captured frame.
+- Virtualized table (handles hundreds of thousands of messages without lag), with filtering by ID/name/channel (press Escape to clear it) and a "decoded only" toggle.
+- Decoded signal panel when a message is selected: physical value, raw value, unit, `VAL_` table labels, multiplexing (including extended/cascaded multiplexors, `SG_MUL_VAL_`), and a warning when a multi-packet J1939 message (e.g. DM1) exceeds the 8 bytes of the captured frame.
 - Trace playback with a speed control.
-- "Messages seen" list sorted by frequency, with a green/red indicator for decoded vs. unknown, each message's channel and source, and search by any of those (name, ID, or source).
-- "Most variation": ranks signals by how many times their value actually changed — not just how often the message was transmitted — showing each signal's channel and source too.
+- "Messages Seen" list sorted by frequency, with a green/red indicator for decoded vs. unknown, each message's channel and source, and search by any of those (name, ID, or source). Right-click a message or signal name to copy it.
+- "Most Active": ranks signals by how many times their value actually changed — not just how often the message was transmitted — showing each signal's channel and source too. Right-click a row to jump to that message in "Messages Seen", or to filter this same list down to only the signals from that message.
 
-## Graphs tab
+## Plots tab
 
-- Pick any DBC-recognized signal (from the message list, the "Most active" panel, or the search box — each showing its message, channel, and source) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
+- Pick any DBC-recognized signal (from the message list, the "Most Active" panel, or the search box — each showing its message, channel, and source; press Escape to close the search dropdown) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
 - Step line (a CAN signal holds its value until the next message).
 - Synchronized cursor across every lane, with a readout panel showing each signal's value, DBC description, and the real timestamp of its last message.
 - Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
@@ -36,15 +36,18 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Vector/J1939 attributes (`BA_`/`BA_DEF_`) on messages, signals, and nodes, with hover hints for common CNH/J1939 attribute names.
 - Save writes a `.dbc` file (Windows-1252 encoded) via the native file picker where supported, or a download otherwise.
 - Check "Read-only" before opening a file to browse it without risking any edit — every field is disabled and Save is hidden.
+- Experimental — keep a backup of any `.dbc` file before editing and saving it.
 
 ## Supported file formats
 
 | File | Format |
 |---|---|
-| DBC | Windows-1252, standard syntax (`BO_`, `SG_`, `VAL_`, `CM_`, simple multiplexing) |
+| DBC | Windows-1252, standard syntax (`BO_`, `SG_`, `VAL_`, `CM_`), including extended/cascaded multiplexing (`SG_MUL_VAL_`) and floating-point signals (`SIG_VALTYPE_`) |
 | Log | `.csv` (`Timestamp,CAN_ID,DLC,Data`) or `.asc` (Vector ASCII, multi-channel) |
 
-Bit-level decoding (Intel/Motorola, signed values, multiplexing, multi-packet message truncation) was validated against [`cantools`](https://github.com/cantools/cantools) before the first version shipped.
+Bit-level decoding (Intel/Motorola, signed values, multiplexing, multi-packet message truncation) was validated against [`cantools`](https://github.com/cantools/cantools) before the first version shipped, and against real CNH DBC files since.
+
+The app checks its own GitHub repo on startup and shows a banner if a newer version is available; updating overwrites the local file in place (or downloads it, in browsers without that capability).
 
 ## Known limitations
 

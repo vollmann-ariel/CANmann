@@ -909,7 +909,16 @@
 
 <div class="ctx-menu" id="varCtxMenu" role="menu">
   <button type="button" class="ctx-menu-item" id="varCtxExplore" role="menuitem">Explore message</button>
+  <button type="button" class="ctx-menu-item" id="varCtxFilterMsg" role="menuitem">Filter by message</button>
+  <button type="button" class="ctx-menu-item" id="varCtxCopySignal" role="menuitem">Copy signal name</button>
+  <button type="button" class="ctx-menu-item" id="varCtxCopyMessage" role="menuitem">Copy message name</button>
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="varCtxCancel" role="menuitem">Cancel</button>
+</div>
+
+<div class="ctx-menu" id="msgCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="msgCtxCopySignal" role="menuitem">Copy signal name</button>
+  <button type="button" class="ctx-menu-item" id="msgCtxCopyMessage" role="menuitem">Copy message name</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="msgCtxCancel" role="menuitem">Cancel</button>
 </div>
 
 <script>
@@ -1209,6 +1218,7 @@
     playTimer: null,
     tab: "graficas",
     varStats: null, // Map "chan:id:signal" -> {channel,id,signalName,msgName,unit,transitions,count} | null = sin calcular / desactualizado
+    varMsgFilter: null, // {channel,id} | null — set by the "Filter by message" context-menu action; cleared as soon as the user types in #varSearch
     chart: {
       series: new Map(),   // key "chan:id:signal" -> {channel,id,signalName,msgName,unit,comment,colorVar,points:[{t,raw,value,label}]}
       order: [],           // keys, insertion order = lane order
@@ -1226,7 +1236,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.2.1";
+  const APP_VERSION = "5.3.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1646,7 +1656,9 @@
     const maxT = Math.max(1, entries[0].transitions);
     wrap.innerHTML = "";
     for (const e of entries) {
-      if (matcher && !(matcher.test(e.signalName) || matcher.test(e.msgName))) continue;
+      if (state.varMsgFilter) {
+        if (e.channel !== state.varMsgFilter.channel || e.id !== state.varMsgFilter.id) continue;
+      } else if (matcher && !(matcher.test(e.signalName) || matcher.test(e.msgName))) continue;
       const key = e.channel + ":" + e.id + ":" + e.signalName;
       const added = state.chart.series.has(key);
       const row = document.createElement("div");
@@ -1695,6 +1707,56 @@
     expandOnlyRailBlock(document.querySelector('.block[data-block="messages"]'));
     el("msgSearch").value = name;
     renderMessageList();
+  });
+  el("varCtxFilterMsg").addEventListener("click", () => {
+    if (!varCtxEntry) return;
+    const { channel, id, msgName } = varCtxEntry;
+    closeVarContextMenu();
+    state.varMsgFilter = { channel, id };
+    el("varSearch").value = msgName;
+    renderVarList();
+  });
+  el("varCtxCopySignal").addEventListener("click", () => {
+    if (varCtxEntry) copyToClipboard(varCtxEntry.signalName);
+    closeVarContextMenu();
+  });
+  el("varCtxCopyMessage").addEventListener("click", () => {
+    if (varCtxEntry) copyToClipboard(varCtxEntry.msgName);
+    closeVarContextMenu();
+  });
+
+  /* ---------- Messages Seen: right-click "copy name" context menu ---------- */
+  let msgCtxTarget = null; // { messageName, signalName? } — signalName absent when the click was on a message row
+  function openMsgContextMenu(x, y, target) {
+    msgCtxTarget = target;
+    el("msgCtxCopySignal").style.display = target.signalName ? "" : "none";
+    const menu = el("msgCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeMsgContextMenu() {
+    msgCtxTarget = null;
+    el("msgCtxMenu").classList.remove("open");
+  }
+  function copyToClipboard(text) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("msgCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeMsgContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeMsgContextMenu(); });
+  el("msgCtxCancel").addEventListener("click", closeMsgContextMenu);
+  el("msgCtxCopyMessage").addEventListener("click", () => {
+    if (msgCtxTarget) copyToClipboard(msgCtxTarget.messageName);
+    closeMsgContextMenu();
+  });
+  el("msgCtxCopySignal").addEventListener("click", () => {
+    if (msgCtxTarget && msgCtxTarget.signalName) copyToClipboard(msgCtxTarget.signalName);
+    closeMsgContextMenu();
   });
 
   function renderStats() {
@@ -1758,6 +1820,7 @@
       } else {
         row.onclick = () => { state.selectedMessageKey = e.key; selectRow(e.lastRow, true); filterToMessage(e); renderMessageList(); };
       }
+      row.addEventListener("contextmenu", (ev) => { ev.preventDefault(); openMsgContextMenu(ev.clientX, ev.clientY, { messageName: e.name || hexId }); });
       wrap.appendChild(row);
       if (signalMatch || (inCharts && state.chart.expanded.has(e.key))) wrap.appendChild(buildSignalPickList(e, signalMatch ? matcher : null));
     }
@@ -1780,6 +1843,7 @@
       list.innerHTML = '<div class="sig-pick-row"><span class="spname">No signals defined</span></div>';
       return list;
     }
+    const msgName = e.name || "0x" + e.id.toString(16).toUpperCase();
     for (const sig of signals) {
       const key = e.channel + ":" + e.id + ":" + sig.name;
       const added = state.chart.series.has(key);
@@ -1790,6 +1854,7 @@
       const swatch = `<span class="swatch" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
       row.innerHTML = `${swatch}<span class="spname">${escapeHtml(sig.name)}</span><span class="spunit">${escapeHtml(sig.unit || "")}</span>`;
       row.onclick = (ev) => { ev.stopPropagation(); toggleSignalInChart(e.channel, e.id, sig.name, { switchTab: false }); };
+      row.addEventListener("contextmenu", (ev) => { ev.preventDefault(); ev.stopPropagation(); openMsgContextMenu(ev.clientX, ev.clientY, { messageName: msgName, signalName: sig.name }); });
       list.appendChild(row);
     }
     return list;
@@ -2847,7 +2912,7 @@
   });
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
-  el("varSearch").addEventListener("input", renderVarList);
+  el("varSearch").addEventListener("input", () => { state.varMsgFilter = null; renderVarList(); });
 
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
