@@ -678,6 +678,7 @@
       <label class="toggle" title="Open the next .dbc file without allowing any edits"><input type="checkbox" id="dbeReadOnlyCheck" checked /> Read-only</label>
       <button type="button" class="btn" id="openBtn">Open</button>
       <input type="file" id="fileInput" accept=".dbc" hidden />
+      <button type="button" class="btn" id="closeBtn">Close</button>
       <button type="button" class="btn primary" id="saveBtn" disabled style="display:none">Save</button>
       <span class="dirty-dot" id="dirtyDot" title="Unsaved changes"></span>
       <span class="fname" id="fnameLabel"></span>
@@ -1236,7 +1237,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.3.0";
+  const APP_VERSION = "5.4.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -4051,6 +4052,23 @@
     if (state.model && state.dirty && !confirm("Discard unsaved changes and start a new DBC?")) return;
     el("dbeReadOnlyCheck").checked = false; // a brand-new DBC is always editable — uncheck so the box reflects that
     openModel(emptyModel(), "new.dbc", false);
+  });
+  el("closeBtn").addEventListener("click", () => {
+    if (!state.model) return; // nothing open — no-op
+    if (state.dirty && !confirm("Discard unsaved changes and close this DBC?")) return;
+    state.model = null;
+    state.fileName = "new.dbc";
+    state.selectedMsgId = null;
+    state.openSignal = null;
+    markClean();
+    applyReadOnly(false);
+    el("dbeReadOnlyCheck").checked = true; // matches the checkbox's own default in the initial HTML
+    el("fnameLabel").textContent = "";
+    el("saveBtn").disabled = true;
+    el("saveBtn").style.display = "none";
+    el("dbeRailBlocksWrap").style.display = "none";
+    el("detail").style.display = "none";
+    el("dbeEmptyState").style.display = "";
   });
 
   async function saveModel() {
