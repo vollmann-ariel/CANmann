@@ -4,6 +4,8 @@ A desktop/browser tool for inspecting CAN bus logs: decodes every message using 
 
 It's a single self-contained HTML file (`can_viewer.html`) — no install, no build step, no external dependencies. Open it straight in the browser and everything runs locally: no loaded file (DBC, CSV, ASC) ever leaves your machine.
 
+![CANmann — Plots tab, showing decoded engine signals over time](screenshot.png)
+
 ## Usage
 
 1. Open `can_viewer.html` in Chrome/Edge (needs `<input type="file">`, drag & drop, Canvas 2D).
