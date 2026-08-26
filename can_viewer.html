@@ -234,6 +234,9 @@
     background: var(--surface-2); color: var(--ink); margin-bottom: 8px;
   }
   .msg-list-wrap { flex: 1 1 auto; overflow-y: auto; padding: 0 6px 10px; }
+  .var-viewport { position: relative; overflow-x: hidden; }
+  .var-spacer { position: relative; }
+  .var-rows { position: absolute; left: 0; right: 0; top: 0; }
   .msg-row {
     display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
     position: relative; margin-bottom: 2px;
@@ -767,7 +770,12 @@
         <h2><span>Most Active</span><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></h2>
         <div class="block-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
           <input class="msg-search" id="varSearch" placeholder="Search signal…" />
-          <div class="msg-list-wrap" id="varList"></div>
+          <div class="msg-list-wrap var-viewport" id="varViewport">
+            <div class="var-spacer" id="varSpacer">
+              <div class="var-rows" id="varRows"></div>
+            </div>
+          </div>
+          <div class="sig-empty" id="varEmptyHint" style="display:none"></div>
         </div>
       </section>
     </div>
@@ -1220,6 +1228,8 @@
     tab: "graficas",
     varStats: null, // Map "chan:id:signal" -> {channel,id,signalName,msgName,unit,transitions,count} | null = sin calcular / desactualizado
     varMsgFilter: null, // {channel,id} | null — set by the "Filter by message" context-menu action; cleared as soon as the user types in #varSearch
+    varEntries: [], // current filtered+sorted entries backing the virtualized #varRows list
+    varMaxT: 1, // transitions count of the globally busiest signal, used to scale every freqbar
     chart: {
       series: new Map(),   // key "chan:id:signal" -> {channel,id,signalName,msgName,unit,comment,colorVar,points:[{t,raw,value,label}]}
       order: [],           // keys, insertion order = lane order
@@ -1237,7 +1247,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.4.0";
+  const APP_VERSION = "5.5.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1637,32 +1647,66 @@
   }
 
   function ensureVarStatsAndRender() {
-    const wrap = el("varList");
-    if (state.trace.length === 0) { wrap.innerHTML = '<div class="sig-empty">Load a log and at least one DBC to see this.</div>'; return; }
+    if (state.trace.length === 0) { showVarEmptyHint("Load a log and at least one DBC to see this."); return; }
     if (state.varStats) { renderVarList(); return; }
-    wrap.innerHTML = '<div class="sig-empty">Calculating changes…</div>';
+    showVarEmptyHint("Calculating changes…");
     setTimeout(() => {
       state.varStats = computeSignalVariations();
       renderVarList();
     }, 10);
   }
 
+  function showVarEmptyHint(text) {
+    el("varViewport").style.display = "none";
+    const hint = el("varEmptyHint");
+    hint.textContent = text;
+    hint.style.display = "";
+  }
+
+  /* ---------- virtualized "Most Active" list (mirrors the trace table's approach: hundreds of
+     signals per multiplexed message means a plain innerHTML rebuild is slow both to compute
+     and to render, so only the rows in view are ever touched) ---------- */
+  const VAR_ROW_H = 56;
+  const varViewportEl = el("varViewport"), varSpacerEl = el("varSpacer"), varRowsEl = el("varRows");
+  let varRowPool = [];
+
   function renderVarList() {
-    const wrap = el("varList");
     if (!state.varStats) return;
     const qRaw = (el("varSearch").value || "").trim();
     const matcher = qRaw ? globToRegex(qRaw) : null;
-    const entries = [...state.varStats.values()].sort((a, b) => b.transitions - a.transitions);
-    if (entries.length === 0) { wrap.innerHTML = '<div class="sig-empty">No decoded signal yet.</div>'; return; }
-    const maxT = Math.max(1, entries[0].transitions);
-    wrap.innerHTML = "";
-    for (const e of entries) {
-      if (state.varMsgFilter) {
-        if (e.channel !== state.varMsgFilter.channel || e.id !== state.varMsgFilter.id) continue;
-      } else if (matcher && !(matcher.test(e.signalName) || matcher.test(e.msgName))) continue;
+    const all = [...state.varStats.values()].sort((a, b) => b.transitions - a.transitions);
+    const entries = all.filter((e) => {
+      if (state.varMsgFilter) return e.channel === state.varMsgFilter.channel && e.id === state.varMsgFilter.id;
+      if (matcher) return matcher.test(e.signalName) || matcher.test(e.msgName);
+      return true;
+    });
+    if (entries.length === 0) { showVarEmptyHint("No decoded signal yet."); return; }
+    el("varEmptyHint").style.display = "none";
+    varViewportEl.style.display = "";
+    state.varEntries = entries;
+    state.varMaxT = Math.max(1, all[0].transitions); // scale bars against the global busiest signal, not just the filtered set
+    varSpacerEl.style.height = entries.length * VAR_ROW_H + "px";
+    renderVisibleVarRows();
+  }
+
+  function renderVisibleVarRows() {
+    const entries = state.varEntries || [];
+    const total = entries.length;
+    const scrollTop = varViewportEl.scrollTop;
+    const viewH = varViewportEl.clientHeight || 300;
+    const first = Math.max(0, Math.floor(scrollTop / VAR_ROW_H) - 6);
+    const visibleN = Math.ceil(viewH / VAR_ROW_H) + 12;
+    const last = Math.min(total, first + visibleN);
+
+    while (varRowPool.length < last - first) varRowPool.push(document.createElement("div"));
+    varRowsEl.style.transform = `translateY(${first * VAR_ROW_H}px)`;
+    varRowsEl.innerHTML = "";
+    for (let p = first; p < last; p++) {
+      const e = entries[p];
       const key = e.channel + ":" + e.id + ":" + e.signalName;
       const added = state.chart.series.has(key);
-      const row = document.createElement("div");
+      const row = varRowPool[p - first];
+      row.style.height = VAR_ROW_H + "px";
       row.className = "msg-row" + (added ? " active" : "");
       row.title = added ? "Remove from Graphs" : "Add to Graphs";
       const swatch = `<span class="status-dot" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
@@ -1674,12 +1718,14 @@
           ${e.sender ? `<div class="src">${escapeHtml(e.sender)}</div>` : ""}
         </span>
         <span class="count">${e.transitions.toLocaleString("en-US")}</span>
-        <span class="freqbar" style="width:${Math.max(4, (e.transitions / maxT) * 100)}%"></span>`;
+        <span class="freqbar" style="width:${Math.max(4, (e.transitions / state.varMaxT) * 100)}%"></span>`;
       row.onclick = () => toggleSignalInChart(e.channel, e.id, e.signalName, { switchTab: true });
-      row.addEventListener("contextmenu", (ev) => { ev.preventDefault(); openVarContextMenu(ev.clientX, ev.clientY, e); });
-      wrap.appendChild(row);
+      row.oncontextmenu = (ev) => { ev.preventDefault(); openVarContextMenu(ev.clientX, ev.clientY, e); };
+      varRowsEl.appendChild(row);
     }
   }
+  varViewportEl.addEventListener("scroll", () => window.requestAnimationFrame(renderVisibleVarRows));
+  window.addEventListener("resize", () => renderVisibleVarRows());
 
   let varCtxEntry = null;
   function openVarContextMenu(x, y, entry) {
@@ -2913,7 +2959,13 @@
   });
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
+  el("msgSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && el("msgSearch").value) { el("msgSearch").value = ""; renderMessageList(); }
+  });
   el("varSearch").addEventListener("input", () => { state.varMsgFilter = null; renderVarList(); });
+  el("varSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && el("varSearch").value) { el("varSearch").value = ""; state.varMsgFilter = null; renderVarList(); }
+  });
 
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
@@ -2944,8 +2996,11 @@
   });
   el("chartAddInput").addEventListener("input", renderChartAddResults);
   el("chartAddInput").addEventListener("focus", renderChartAddResults);
+  el("chartAddInput").addEventListener("keydown", (e) => {
+    // clearing the query also closes the dropdown, since renderChartAddResults() hides it on an empty query
+    if (e.key === "Escape" && el("chartAddInput").value) { el("chartAddInput").value = ""; renderChartAddResults(); }
+  });
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") el("chartAddResults").classList.remove("open"); });
   window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
   wireChartInteraction();
 
@@ -3515,6 +3570,9 @@
   }
 
   el("dbeMsgSearch").addEventListener("input", renderMessageList);
+  el("dbeMsgSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && el("dbeMsgSearch").value) { el("dbeMsgSearch").value = ""; renderMessageList(); }
+  });
 
   el("addMsgBtn").addEventListener("click", () => {
     const model = state.model;
