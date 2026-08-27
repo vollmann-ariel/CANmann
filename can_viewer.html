@@ -930,6 +930,13 @@
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="msgCtxCancel" role="menuitem">Cancel</button>
 </div>
 
+<div class="ctx-menu" id="sigCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="sigCtxInsert" role="menuitem">Insert in plot area</button>
+  <button type="button" class="ctx-menu-item" id="sigCtxCopyMessage" role="menuitem">Copy message name</button>
+  <button type="button" class="ctx-menu-item" id="sigCtxCopySignal" role="menuitem">Copy signal name</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="sigCtxCancel" role="menuitem">Cancel</button>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -1247,7 +1254,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.5.0";
+  const APP_VERSION = "5.6.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1806,6 +1813,53 @@
     closeMsgContextMenu();
   });
 
+  /* ---------- Signal panel (Trace tab detail): right-click "insert/copy" context menu ---------- */
+  let sigCtxEntry = null; // { channel, id, msgName, signalName }
+  function openSigContextMenu(x, y, entry) {
+    sigCtxEntry = entry;
+    const key = entry.channel + ":" + entry.id + ":" + entry.signalName;
+    el("sigCtxInsert").textContent = state.chart.series.has(key) ? "Remove from plot area" : "Insert in plot area";
+    const menu = el("sigCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeSigContextMenu() {
+    sigCtxEntry = null;
+    el("sigCtxMenu").classList.remove("open");
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("sigCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeSigContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeSigContextMenu(); });
+  el("sigCtxCancel").addEventListener("click", closeSigContextMenu);
+  el("sigCtxInsert").addEventListener("click", () => {
+    if (sigCtxEntry) toggleSignalInChart(sigCtxEntry.channel, sigCtxEntry.id, sigCtxEntry.signalName, { switchTab: true });
+    closeSigContextMenu();
+  });
+  el("sigCtxCopyMessage").addEventListener("click", () => {
+    if (sigCtxEntry) copyToClipboard(sigCtxEntry.msgName);
+    closeSigContextMenu();
+  });
+  el("sigCtxCopySignal").addEventListener("click", () => {
+    if (sigCtxEntry) copyToClipboard(sigCtxEntry.signalName);
+    closeSigContextMenu();
+  });
+  el("sigPanel").addEventListener("contextmenu", (ev) => {
+    const row = ev.target.closest(".sig-row");
+    if (!row || !row.dataset.sig) return;
+    ev.preventDefault();
+    openSigContextMenu(ev.clientX, ev.clientY, {
+      channel: parseInt(row.dataset.channel, 10),
+      id: parseInt(row.dataset.id, 10),
+      msgName: row.dataset.msg,
+      signalName: row.dataset.sig,
+    });
+  });
+
   function renderStats() {
     const strip = el("statsStrip");
     if (state.trace.length === 0) { strip.innerHTML = ""; return; }
@@ -1914,10 +1968,11 @@
 
   /* ---------- filtering ---------- */
   function applyFilter() {
-    const q = (el("traceSearch").value || "").trim().toLowerCase();
+    const qRaw = (el("traceSearch").value || "").trim();
+    const matcher = qRaw ? globToRegex(qRaw) : null;
     const onlyDecoded = el("onlyDecoded").checked;
 
-    if (!q && !onlyDecoded) {
+    if (!matcher && !onlyDecoded) {
       state.filtered = null;
     } else {
       const out = [];
@@ -1926,11 +1981,11 @@
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         if (onlyDecoded && !def) continue;
-        if (q) {
+        if (matcher) {
           const hexId = "0x" + r.id.toString(16);
-          let hit = hexId.includes(q) || String(r.id).includes(q) || String(r.channel) === q;
+          let hit = matcher.test(hexId) || matcher.test(String(r.id)) || matcher.test(String(r.channel));
           if (!hit && def) {
-            hit = def.name.toLowerCase().includes(q) || def.signals.some((s) => s.name.toLowerCase().includes(q));
+            hit = matcher.test(def.name) || def.signals.some((s) => matcher.test(s.name));
           }
           if (!hit) continue;
         }
@@ -2063,7 +2118,7 @@
       for (const sg of decoded.signals) {
         const hasLabel = sg.label !== null;
         const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
-        html += `<div class="sig-row">
+        html += `<div class="sig-row" data-channel="${r.channel}" data-id="${r.id}" data-msg="${escapeHtml(msg.name)}" data-sig="${escapeHtml(sg.name)}">
           <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
           <div class="sraw">raw: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
           ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
