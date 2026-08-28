@@ -1267,7 +1267,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.8.0";
+  const APP_VERSION = "5.9.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1809,9 +1809,11 @@
     if (!varCtxEntry) return;
     const { channel, id, msgName } = varCtxEntry;
     closeVarContextMenu();
+    const block = document.querySelector('.block[data-block="variations"]');
+    if (block && block.classList.contains("collapsed")) expandOnlyRailBlock(block);
     state.varMsgFilter = { channel, id };
     el("varSearch").value = msgName;
-    renderVarList();
+    ensureVarStatsAndRender(); // handles both "already computed" (renders immediately) and "collapsed since boot" (computes first)
   }
   el("varCtxFilterMsg").addEventListener("click", filterVarByMessage);
   el("varCtxTraceFilterMsg").addEventListener("click", filterVarByMessage);
@@ -2790,6 +2792,13 @@
       row.title = "Drag to reorder · click to jump to chart";
       row.dataset.key = key;
       row.addEventListener("pointerdown", (e) => startRowDrag(e, row, key));
+      // same menu Most Active shows on Plots — chartReadout only exists in that tab, so it's
+      // always the plain #varCtxMenu variant (no "Insert in plot area": these signals are
+      // already charted).
+      row.addEventListener("contextmenu", (ev) => {
+        ev.preventDefault();
+        openVarContextMenu(ev.clientX, ev.clientY, { channel: s.channel, id: s.id, msgName: s.msgName, signalName: s.signalName }, el("varCtxMenu"));
+      });
       const top = document.createElement("div"); top.className = "top";
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
       const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
