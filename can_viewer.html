@@ -146,7 +146,7 @@
   .about-card .about-name { font-weight: 700; color: var(--ink); }
   .about-card a { color: inherit; opacity: .8; }
   .about-card a:hover { color: var(--accent); opacity: 1; }
-  .about-card .about-github { display: inline-flex; align-items: center; gap: 4px; }
+  .about-card .about-github svg { vertical-align: -1px; margin-right: 4px; }
   .update-banner {
     display: flex; align-items: center; gap: 10px; padding: 7px 14px;
     background: var(--accent-soft); border-bottom: 1px solid var(--accent);
@@ -929,6 +929,14 @@
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="varCtxCancel" role="menuitem">Cancel</button>
 </div>
 
+<div class="ctx-menu" id="varCtxMenuTrace" role="menu">
+  <button type="button" class="ctx-menu-item" id="varCtxTraceInsert" role="menuitem">Insert in plot area</button>
+  <button type="button" class="ctx-menu-item" id="varCtxTraceFilterMsg" role="menuitem">Filter by message</button>
+  <button type="button" class="ctx-menu-item" id="varCtxTraceCopySignal" role="menuitem">Copy signal name</button>
+  <button type="button" class="ctx-menu-item" id="varCtxTraceCopyMessage" role="menuitem">Copy message name</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="varCtxTraceCancel" role="menuitem">Cancel</button>
+</div>
+
 <div class="ctx-menu" id="msgCtxMenu" role="menu">
   <button type="button" class="ctx-menu-item" id="msgCtxCopySignal" role="menuitem">Copy signal name</button>
   <button type="button" class="ctx-menu-item" id="msgCtxCopyMessage" role="menuitem">Copy message name</button>
@@ -1259,7 +1267,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.7.0";
+  const APP_VERSION = "5.8.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1720,7 +1728,7 @@
       const row = varRowPool[p - first];
       row.style.height = VAR_ROW_H + "px";
       row.className = "msg-row" + (added ? " active" : "");
-      row.title = added ? "Remove from Graphs" : "Add to Graphs";
+      row.title = state.tab === "graficas" ? (added ? "Remove from Graphs" : "Add to Graphs") : "";
       const swatch = `<span class="status-dot" style="background:${added ? `var(${state.chart.series.get(key).colorVar})` : "transparent"}"></span>`;
       row.innerHTML = `
         ${swatch}
@@ -1731,34 +1739,64 @@
         </span>
         <span class="count">${e.transitions.toLocaleString("en-US")}</span>
         <span class="freqbar" style="width:${Math.max(4, (e.transitions / state.varMaxT) * 100)}%"></span>`;
-      row.onclick = () => toggleSignalInChart(e.channel, e.id, e.signalName, { switchTab: true });
-      row.oncontextmenu = (ev) => { ev.preventDefault(); openVarContextMenu(ev.clientX, ev.clientY, e); };
+      row.onclick = () => {
+        if (state.tab === "graficas") { toggleSignalInChart(e.channel, e.id, e.signalName, { switchTab: true }); return; }
+        const msgEntry = state.msgIndex.get(e.channel + ":" + e.id);
+        if (!msgEntry) return;
+        state.selectedMessageKey = msgEntry.key;
+        selectRow(msgEntry.lastRow, true);
+        filterToMessage(msgEntry);
+        renderMessageList();
+      };
+      row.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        if (state.tab === "graficas") {
+          openVarContextMenu(ev.clientX, ev.clientY, e, el("varCtxMenu"));
+        } else {
+          el("varCtxTraceInsert").textContent = plotAreaActionLabel(e.channel, e.id, e.signalName);
+          openVarContextMenu(ev.clientX, ev.clientY, e, el("varCtxMenuTrace"));
+        }
+      };
       varRowsEl.appendChild(row);
     }
   }
   varViewportEl.addEventListener("scroll", () => window.requestAnimationFrame(renderVisibleVarRows));
   window.addEventListener("resize", () => renderVisibleVarRows());
 
+  // Shared by the Most Active and signal-panel context menus: whether "insert" would add or
+  // remove this signal from the Plots area, keyed the same way state.chart.series already is.
+  function plotAreaActionLabel(channel, id, signalName) {
+    const key = channel + ":" + id + ":" + signalName;
+    return state.chart.series.has(key) ? "Remove from plot area" : "Insert in plot area";
+  }
+
+  // Most Active's row menu differs by tab: Plots keeps "Explore message" (jump to Messages Seen)
+  // since the row click itself already handles charting there; Trace drops that (the row click
+  // filters instead) and gains "Insert in plot area" so charting a signal is still one action
+  // away. Same entry shape and Filter/Copy actions either way, so both menus share one set of
+  // handlers and only differ in which DOM element is open.
   let varCtxEntry = null;
-  function openVarContextMenu(x, y, entry) {
+  let varCtxActiveMenu = null; // el("varCtxMenu") or el("varCtxMenuTrace"), whichever is open
+  function openVarContextMenu(x, y, entry, menuEl) {
     varCtxEntry = entry;
-    const menu = el("varCtxMenu");
-    menu.classList.add("open");
-    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
-    const rect = menu.getBoundingClientRect();
-    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
-    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+    varCtxActiveMenu = menuEl;
+    menuEl.classList.add("open");
+    menuEl.style.left = "0px"; menuEl.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menuEl.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
   }
   function closeVarContextMenu() {
     varCtxEntry = null;
-    el("varCtxMenu").classList.remove("open");
+    if (varCtxActiveMenu) varCtxActiveMenu.classList.remove("open");
+    varCtxActiveMenu = null;
   }
   document.addEventListener("mousedown", (ev) => {
-    const menu = el("varCtxMenu");
-    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeVarContextMenu();
+    if (varCtxActiveMenu && !varCtxActiveMenu.contains(ev.target)) closeVarContextMenu();
   });
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeVarContextMenu(); });
   el("varCtxCancel").addEventListener("click", closeVarContextMenu);
+  el("varCtxTraceCancel").addEventListener("click", closeVarContextMenu);
   el("varCtxExplore").addEventListener("click", () => {
     if (!varCtxEntry) return;
     const name = varCtxEntry.msgName;
@@ -1767,20 +1805,24 @@
     el("msgSearch").value = name;
     renderMessageList();
   });
-  el("varCtxFilterMsg").addEventListener("click", () => {
+  function filterVarByMessage() {
     if (!varCtxEntry) return;
     const { channel, id, msgName } = varCtxEntry;
     closeVarContextMenu();
     state.varMsgFilter = { channel, id };
     el("varSearch").value = msgName;
     renderVarList();
-  });
-  el("varCtxCopySignal").addEventListener("click", () => {
-    if (varCtxEntry) copyToClipboard(varCtxEntry.signalName);
-    closeVarContextMenu();
-  });
-  el("varCtxCopyMessage").addEventListener("click", () => {
-    if (varCtxEntry) copyToClipboard(varCtxEntry.msgName);
+  }
+  el("varCtxFilterMsg").addEventListener("click", filterVarByMessage);
+  el("varCtxTraceFilterMsg").addEventListener("click", filterVarByMessage);
+  function copyVarSignalName() { if (varCtxEntry) copyToClipboard(varCtxEntry.signalName); closeVarContextMenu(); }
+  function copyVarMessageName() { if (varCtxEntry) copyToClipboard(varCtxEntry.msgName); closeVarContextMenu(); }
+  el("varCtxCopySignal").addEventListener("click", copyVarSignalName);
+  el("varCtxTraceCopySignal").addEventListener("click", copyVarSignalName);
+  el("varCtxCopyMessage").addEventListener("click", copyVarMessageName);
+  el("varCtxTraceCopyMessage").addEventListener("click", copyVarMessageName);
+  el("varCtxTraceInsert").addEventListener("click", () => {
+    if (varCtxEntry) toggleSignalInChart(varCtxEntry.channel, varCtxEntry.id, varCtxEntry.signalName, { switchTab: true });
     closeVarContextMenu();
   });
 
@@ -1822,8 +1864,7 @@
   let sigCtxEntry = null; // { channel, id, msgName, signalName }
   function openSigContextMenu(x, y, entry) {
     sigCtxEntry = entry;
-    const key = entry.channel + ":" + entry.id + ":" + entry.signalName;
-    el("sigCtxInsert").textContent = state.chart.series.has(key) ? "Remove from plot area" : "Insert in plot area";
+    el("sigCtxInsert").textContent = plotAreaActionLabel(entry.channel, entry.id, entry.signalName);
     const menu = el("sigCtxMenu");
     menu.classList.add("open");
     menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
