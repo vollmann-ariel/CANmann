@@ -146,6 +146,7 @@
   .about-card .about-name { font-weight: 700; color: var(--ink); }
   .about-card a { color: inherit; opacity: .8; }
   .about-card a:hover { color: var(--accent); opacity: 1; }
+  .about-card .about-github { display: inline-flex; align-items: center; gap: 4px; }
   .update-banner {
     display: flex; align-items: center; gap: 10px; padding: 7px 14px;
     background: var(--accent-soft); border-bottom: 1px solid var(--accent);
@@ -714,6 +715,10 @@
         <div>VOLLMANN, Ariel R.</div>
         <div>CNH ARGENTINA · COR Plant</div>
         <a href="mailto:ariel.vollmann@cnh.com">ariel.vollmann@cnh.com</a>
+        <a class="about-github" href="https://github.com/vollmann-ariel/CANmann" target="_blank" rel="noopener noreferrer">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
       </div>
     </div>
   </header>
@@ -1254,7 +1259,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.6.0";
+  const APP_VERSION = "5.7.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2748,15 +2753,7 @@
       const swatch = document.createElement("span"); swatch.className = "swatch"; swatch.style.background = `var(${s.colorVar})`;
       const name = document.createElement("span"); name.className = "rname"; name.textContent = s.signalName;
       const val = document.createElement("span"); val.className = "rval";
-      let compact = "—";
-      if (vp) {
-        if (vp.label !== null) { val.textContent = vp.label; compact = vp.label; }
-        else {
-          val.textContent = formatNum(vp.value);
-          compact = formatNum(vp.value);
-          if (s.unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = s.unit; val.appendChild(u); }
-        }
-      } else { val.textContent = "—"; }
+      renderValueWithUnit(val, vp, s.unit);
       top.appendChild(swatch); top.appendChild(name); top.appendChild(val);
       row.appendChild(top);
       if (vp) {
@@ -2769,8 +2766,19 @@
         row.appendChild(desc);
       }
       panel.appendChild(row);
-      if (s.el && s.el.lval) s.el.lval.textContent = compact;
+      if (s.el && s.el.lval) renderValueWithUnit(s.el.lval, vp, s.unit);
     }
+  }
+
+  // Fills an element with a signal's current value the same way in both the chart readout
+  // (.rval) and the lane header (.lval): the value-table label if there is one, otherwise the
+  // formatted number with its unit as a dimmer trailing span.
+  function renderValueWithUnit(target, vp, unit) {
+    target.textContent = "";
+    if (!vp) { target.textContent = "—"; return; }
+    if (vp.label !== null) { target.textContent = vp.label; return; }
+    target.textContent = formatNum(vp.value);
+    if (unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = unit; target.appendChild(u); }
   }
 
   function scrollToLane(key) {
