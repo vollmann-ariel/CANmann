@@ -1235,7 +1235,7 @@
    * App state
    * ========================================================= */
   const state = {
-    dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC subidos, listados como referencia; NO se leen/parsean hasta asignarse a un bus
+    dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC listados como referencia; cachedText es undefined hasta que hace falta (asignación a un bus, o registro de un archivo recién subido) — ver withDbcText
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
@@ -1267,7 +1267,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.9.0";
+  const APP_VERSION = "5.9.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1334,7 +1334,13 @@
    * la lista "DBC Files" (y por lo tanto el menú BUS -> DBC Assignment) sea la misma de una
    * apertura a la siguiente. dbc_channels guarda, aparte, qué archivo está asignado a cada
    * bus ahora mismo. Son dos stores separados porque tienen ciclos de vida distintos: sacar
-   * un DBC de un bus (unassign) no debe hacer que se olvide el archivo en sí. */
+   * un DBC de un bus (unassign) no debe hacer que se olvide el archivo en sí.
+   *
+   * Al boot, sólo se traen los NOMBRES de dbc_files (getAllKeys, liviano) — el texto de cada
+   * archivo (varios cientos de KB a unos pocos MB en los DBC reales de este proyecto) recién se
+   * lee de IndexedDB cuando hace falta: al asignarlo a un bus (withDbcText) o, para los que ya
+   * estaban asignados la sesión anterior, inmediatamente acá mismo (loadStoredChannelDbcs sí
+   * necesita el texto completo de una, para poder decodificar sin que el usuario haga nada). */
   const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
@@ -1371,12 +1377,12 @@
   }
   function loadStoredDbcFiles() {
     openDbcStore().then((db) => {
-      const req = db.transaction(DBC_FILES_STORE_NAME, "readonly").objectStore(DBC_FILES_STORE_NAME).getAll();
+      const req = db.transaction(DBC_FILES_STORE_NAME, "readonly").objectStore(DBC_FILES_STORE_NAME).getAllKeys();
       req.onsuccess = () => {
         let added = false;
-        for (const entry of req.result) {
-          if (!state.dbcFiles.some((d) => d.fileName === entry.fileName)) {
-            state.dbcFiles.push({ fileName: entry.fileName, file: null, cachedText: entry.text });
+        for (const fileName of req.result) {
+          if (!state.dbcFiles.some((d) => d.fileName === fileName)) {
+            state.dbcFiles.push({ fileName, file: null, cachedText: undefined });
             added = true;
           }
         }
@@ -1389,13 +1395,23 @@
       const req = db.transaction(DBC_STORE_NAME, "readonly").objectStore(DBC_STORE_NAME).getAll();
       req.onsuccess = () => {
         for (const entry of req.result) {
-          if (!state.dbcFiles.some((d) => d.fileName === entry.fileName)) {
-            state.dbcFiles.push({ fileName: entry.fileName, file: null, cachedText: entry.text });
-          }
+          let fileEntry = state.dbcFiles.find((d) => d.fileName === entry.fileName);
+          if (!fileEntry) { fileEntry = { fileName: entry.fileName, file: null, cachedText: undefined }; state.dbcFiles.push(fileEntry); }
+          fileEntry.cachedText = entry.text; // already have it here, no reason to make withDbcText fetch it again later
           applyChannelDbc(entry.channel, entry.fileName, entry.text, { skipStore: true });
         }
       };
     }).catch(() => {});
+  }
+  // Fetches one file's text from dbc_files on demand — the counterpart to registerDbcFile's
+  // FileReader path, used when an entry survived a reopen (loadStoredDbcFiles) without a real
+  // File object to read from.
+  function fetchStoredDbcText(fileName, cb, onerror) {
+    openDbcStore().then((db) => {
+      const req = db.transaction(DBC_FILES_STORE_NAME, "readonly").objectStore(DBC_FILES_STORE_NAME).get(fileName);
+      req.onsuccess = () => { if (req.result) cb(req.result.text); else onerror(); };
+      req.onerror = onerror;
+    }).catch(onerror);
   }
 
   /* ---------- self-update check (GitHub) ----------
@@ -1509,14 +1525,23 @@
     withDbcText(entry, (text) => rememberDbcFile(entry.fileName, text));
   }
 
-  // Lee el texto de un archivo DBC sólo la primera vez que hace falta (al registrarlo o al
-  // asignarlo a un bus, lo que ocurra primero); lo cachea para no releerlo después.
+  // Lee el texto de un archivo DBC sólo la primera vez que hace falta (al registrarlo, al
+  // asignarlo a un bus, o al reasignarlo tras haber sido liberado — ver releaseDbcTextIfUnused);
+  // lo cachea para no releerlo después. Si el archivo llegó de esta sesión (entry.file, recién
+  // subido) se lee con FileReader; si sólo sobrevivió entre aperturas (loadStoredDbcFiles, sin
+  // File real) se busca su texto en IndexedDB.
   function withDbcText(entry, cb) {
     if (entry.cachedText !== undefined) { cb(entry.cachedText); return; }
-    const reader = new FileReader();
-    reader.onload = () => { entry.cachedText = reader.result; cb(reader.result); };
-    reader.onerror = () => alert("Couldn't read " + entry.fileName);
-    reader.readAsText(entry.file, "windows-1252");
+    if (entry.file) {
+      const reader = new FileReader();
+      reader.onload = () => { entry.cachedText = reader.result; cb(reader.result); };
+      reader.onerror = () => alert("Couldn't read " + entry.fileName);
+      reader.readAsText(entry.file, "windows-1252");
+    } else {
+      fetchStoredDbcText(entry.fileName,
+        (text) => { entry.cachedText = text; cb(text); },
+        () => alert("Couldn't read " + entry.fileName + " — try removing it and selecting it again."));
+    }
   }
 
   function applyChannelDbc(channel, fileName, text, opts) {
@@ -1524,8 +1549,10 @@
     try { dbc = parseDBC(text); } catch (e) { alert("Couldn't parse " + fileName + ": " + e.message); return; }
     let sigCount = 0;
     dbc.messages.forEach((m) => (sigCount += m.signals.length));
+    const prevFileName = state.channelDbc[channel] ? state.channelDbc[channel].fileName : null;
     state.channelDbc[channel] = { fileName, dbc, msgCount: dbc.messages.size, sigCount };
     if (!opts || !opts.skipStore) rememberChannelDbc(channel, fileName, text);
+    if (prevFileName && prevFileName !== fileName) releaseDbcTextIfUnused(prevFileName);
     renderDbcList();
     recomputeAll();
   }
@@ -1537,10 +1564,21 @@
   }
 
   function unassignChannel(channel) {
+    const prevFileName = state.channelDbc[channel] ? state.channelDbc[channel].fileName : null;
     state.channelDbc[channel] = null;
     forgetChannelDbc(channel);
+    if (prevFileName) releaseDbcTextIfUnused(prevFileName);
     renderDbcList();
     recomputeAll();
+  }
+
+  // A file swapped out of a bus (reassigned or unassigned) no longer needs its text in memory
+  // unless another bus still points to it — it stays listed either way, just re-fetched
+  // (FileReader or IndexedDB, per withDbcText) the next time it's actually picked again.
+  function releaseDbcTextIfUnused(fileName) {
+    if ([1, 2, 3].some((c) => state.channelDbc[c] && state.channelDbc[c].fileName === fileName)) return;
+    const entry = state.dbcFiles.find((d) => d.fileName === fileName);
+    if (entry) entry.cachedText = undefined;
   }
 
   function renderChanMap() {
