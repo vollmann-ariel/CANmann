@@ -1239,6 +1239,7 @@
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
+    fastPacket: new Map(), // rowIndex -> Uint8Array | null — ver buildFastPacketReassembly/effectiveFrameData
     filtered: null,       // array of row indices, or null = all
     t0: 0,                 // trace start time, for display as relative seconds
     selectedRow: null,
@@ -1267,7 +1268,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "5.9.1";
+  const APP_VERSION = "6.0.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1649,6 +1650,7 @@
   /* ---------- message index / stats ---------- */
   function recomputeAll() {
     buildMessageIndex();
+    buildFastPacketReassembly();
     renderStats();
     renderMessageList();
     applyFilter();
@@ -1665,13 +1667,79 @@
       if (!e) {
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
-        e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null };
+        e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null, msg: def };
         idx.set(key, e);
       }
       e.count++;
       e.lastRow = i;
     }
     state.msgIndex = idx;
+  }
+
+  /* ---------- reensamblado NMEA2000 "Fast Packet" ----------
+   * Algunos mensajes (ej. GNSS_Position_Data_1C, PGN 129029) declaran un DLC > 8 en el DBC
+   * porque en el bus real viajan fragmentados: varias tramas de 8 bytes comparten el mismo ID,
+   * y el byte 0 de cada una es (contador_secuencia<<5 | índice_de_frame). El frame con índice 0
+   * trae en su byte 1 el largo total real del payload reensamblado (puede ser MENOR al DLC del
+   * DBC — varios PGN de NMEA2000 son de largo variable, el DBC declara el caso máximo) y aporta
+   * 6 bytes de payload (sus bytes 2-7); cada frame siguiente aporta 7 bytes (sus bytes 1-7).
+   * Sin este reensamblado, decodeMessage() trataría cada trama cruda como si fuera el mensaje
+   * completo: las señales que caen más allá del byte 8 se pierden (ya manejado por
+   * signalFitsData), pero las que caen dentro de los primeros 8 bytes decodifican basura
+   * silenciosa, porque ese byte 0 real es el encabezado Fast Packet, no la señal que el DBC cree
+   * que es. Ver el plan/análisis de esta sesión para el caso real que motivó esto.
+   *
+   * state.fastPacket: Map<rowIndex, Uint8Array|null>
+   *   - ausente = fila normal, decodificar sus propios bytes crudos (caso común, sin costo extra)
+   *   - presente con null = fila consumida por un intento de reensamblado válido pero aún
+   *     incompleto (o abandonado) — nunca decodificar esta fila por sí sola
+   *   - presente con un Uint8Array = esta fila completa una secuencia válida — decodificar ESE
+   *     buffer en lugar de los 8 bytes propios de la fila
+   * Las filas huérfanas (continuación sin un frame 0 válido previo) y los frame-0 inválidos NO
+   * se tocan — quedan totalmente afuera del Map, así que decodifican exactamente igual que hoy;
+   * esto es lo que garantiza que un mensaje que nunca matchea Fast Packet no empeore. */
+  function buildFastPacketReassembly() {
+    const fastPacket = new Map();
+    const inProgress = new Map(); // "channel:id" -> { seq, expectedLen, bytes, frameIdx, lastT }
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      const key = r.channel + ":" + r.id;
+      const idxEntry = state.msgIndex.get(key);
+      const msg = idxEntry ? idxEntry.msg : null;
+      if (!msg || msg.dlc <= 8 || r.data.length === 0) continue;
+      const b0 = r.data[0], seq = b0 >> 5, frameIdx = b0 & 0x1f;
+      const cur = inProgress.get(key);
+      if (frameIdx === 0) {
+        if (cur) inProgress.delete(key); // un nuevo frame 0 intercalado abandona la secuencia previa (sus filas ya quedaron en null)
+        const declaredLen = r.data[1];
+        if (r.data.length >= 2 && declaredLen > 8 && declaredLen <= msg.dlc) {
+          inProgress.set(key, { seq, expectedLen: declaredLen, bytes: Array.from(r.data.slice(2)), frameIdx: 0, lastT: r.t });
+          fastPacket.set(i, null);
+        }
+        // si no valida: no tocar el Map -> esta fila decodifica cruda, exactamente como hoy
+        continue;
+      }
+      if (cur && cur.seq === seq && frameIdx === cur.frameIdx + 1 && r.t - cur.lastT <= 1.0) {
+        for (const b of r.data.slice(1)) cur.bytes.push(b);
+        cur.frameIdx = frameIdx;
+        cur.lastT = r.t;
+        fastPacket.set(i, null);
+        if (cur.bytes.length >= cur.expectedLen) {
+          fastPacket.set(i, Uint8Array.from(cur.bytes.slice(0, cur.expectedLen)));
+          inProgress.delete(key);
+        }
+      } else {
+        inProgress.delete(key); // continuación huérfana o secuencia rota -> no tocar el Map, esta fila decodifica cruda
+      }
+    }
+    state.fastPacket = fastPacket;
+  }
+
+  // Buffer efectivo a decodificar para una fila del trace: el reensamblado si esta fila completa
+  // una secuencia Fast Packet, null si es parte de una secuencia (sin decode propio), o sus
+  // propios bytes crudos en el caso normal (ver buildFastPacketReassembly).
+  function effectiveFrameData(rowIndex) {
+    return state.fastPacket.has(rowIndex) ? state.fastPacket.get(rowIndex) : state.trace[rowIndex].data;
   }
 
   /* ---------- señales con más variaciones de estado ---------- */
@@ -1681,7 +1749,9 @@
       const r = state.trace[i];
       const dbc = findDbcForChannelId(r.channel, r.id);
       if (!dbc) continue;
-      const decoded = decodeMessage(dbc, r.id, r.data);
+      const data = effectiveFrameData(i);
+      if (!data) continue;
+      const decoded = decodeMessage(dbc, r.id, data);
       if (!decoded) continue;
       for (const sig of decoded.signals) {
         const key = r.channel + ":" + r.id + ":" + sig.name;
@@ -2175,30 +2245,43 @@
     const r = state.trace[rowIdx];
     const dbc = findDbcForChannelId(r.channel, r.id);
     const hexId = "0x" + r.id.toString(16).toUpperCase();
-    const decoded = dbc ? decodeMessage(dbc, r.id, r.data) : null;
+    const data = dbc ? effectiveFrameData(rowIdx) : null;
+    const reassembled = !!data && data !== r.data; // effectiveFrameData gave back a distinct buffer, not this row's own bytes
+    const decoded = data ? decodeMessage(dbc, r.id, data) : null;
 
     let html = "";
-    if (!decoded) {
+    if (!dbc) {
       html += `<div class="sig-header"><div class="msgname unknown">${hexId} — not defined</div>
         <div class="msgmeta"><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
         <div class="comment">This ID isn't recognized by any of the loaded DBC files.</div></div>`;
-    } else {
-      const msg = decoded.message;
-      const truncated = msg.dlc > r.data.length;
+    } else if (!data) {
+      const msg = dbc.messages.get(r.id);
       html += `<div class="sig-header">
         <div class="msgname">${escapeHtml(msg.name)}</div>
         <div class="msgmeta">
           <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
           ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
         </div>
-        ${truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-packet</span> <span class="comment" style="display:inline">DBC defines ${msg.dlc} bytes; captured frame has ${r.data.length} — out-of-range signals are skipped.</span></div>` : ""}
+        <div class="comment">Part of a multi-frame message — select the frame that completes it to see decoded signals.</div>
+      </div>`;
+    } else {
+      const msg = decoded.message;
+      const truncated = msg.dlc > data.length;
+      html += `<div class="sig-header">
+        <div class="msgname">${escapeHtml(msg.name)}</div>
+        <div class="msgmeta">
+          <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
+          ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
+        </div>
+        ${!reassembled && truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-packet</span> <span class="comment" style="display:inline">DBC defines ${msg.dlc} bytes; captured frame has ${data.length} — out-of-range signals are skipped.</span></div>` : ""}
+        ${reassembled ? `<div style="margin-top:6px"><span class="badge ok">reassembled</span> <span class="comment" style="display:inline">${data.length} bytes reassembled from multiple frames${truncated ? ` (DBC defines up to ${msg.dlc}; this transmission used fewer — some optional signals aren't present)` : ""}.</span></div>` : ""}
         ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
       </div>`;
       if (msg.isMultiplexed) {
         const muxSig = msg.signals.find((s) => s.isMultiplexor && s.muxValue === null);
         html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — showing the active signal subset</div>`;
       }
-      html += '<div class="raw-bytes">' + Array.from(r.data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
+      html += '<div class="raw-bytes">' + Array.from(data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
       html += '<div class="sig-table">';
       if (decoded.signals.length === 0) html += '<div class="sig-empty">No signals visible in this frame.</div>';
       for (const sg of decoded.signals) {
@@ -2268,7 +2351,9 @@
     for (let i = 0; i < state.trace.length; i++) {
       const r = state.trace[i];
       if (r.channel !== channel || r.id !== id) continue;
-      const decoded = decodeMessage(dbc, id, r.data);
+      const data = effectiveFrameData(i);
+      if (!data) continue;
+      const decoded = decodeMessage(dbc, id, data);
       if (!decoded) continue;
       const sig = decoded.signals.find((s) => s.name === signalName);
       if (!sig) continue; // rama de mux inactiva o señal fuera de rango en este frame — hueco en la serie
