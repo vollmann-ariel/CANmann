@@ -1240,6 +1240,11 @@
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     fastPacket: new Map(), // rowIndex -> Uint8Array | null — ver buildFastPacketReassembly/effectiveFrameData
+    tpReassembly: new Map(), // rowIndex -> {dbc, msg, data: Uint8Array} — solo la fila que COMPLETA una sesión
+    // J1939 Transport Protocol (BAM/RTS-CTS) válida; ver buildTpReassembly. A diferencia de fastPacket es de
+    // dos estados (ausente/resuelto): las filas TP.DT intermedias no se tocan porque, a diferencia de un
+    // fragmento Fast Packet, sus propios bytes ya decodifican bien hoy (SeqNumTPDT/PktDataTPDT son señales
+    // reales declaradas en el DBC, no un encabezado mal interpretado).
     filtered: null,       // array of row indices, or null = all
     t0: 0,                 // trace start time, for display as relative seconds
     selectedRow: null,
@@ -1268,7 +1273,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.0.0";
+  const APP_VERSION = "6.1.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1651,6 +1656,7 @@
   function recomputeAll() {
     buildMessageIndex();
     buildFastPacketReassembly();
+    buildTpReassembly();
     renderStats();
     renderMessageList();
     applyFilter();
@@ -1740,6 +1746,78 @@
   // propios bytes crudos en el caso normal (ver buildFastPacketReassembly).
   function effectiveFrameData(rowIndex) {
     return state.fastPacket.has(rowIndex) ? state.fastPacket.get(rowIndex) : state.trace[rowIndex].data;
+  }
+
+  /* ---------- reensamblado J1939 Transport Protocol (BAM / RTS-CTS) ----------
+   * Distinto de Fast Packet: acá los fragmentos de datos (TP.DT, PGN 60160) viajan en un ID
+   * totalmente distinto del mensaje de aplicación que transportan (ej. RC_0F), anunciado por un
+   * mensaje de control TP.CM (PGN 60416, byte 0 = 0x20 BAM o 0x10 RTS) que declara el PGN y largo
+   * total. Además, a diferencia de un fragmento Fast Packet, los bytes propios de un frame TP.DT
+   * ya decodifican bien HOY (SeqNumTPDT/PktDataTPDT son señales reales declaradas en el DBC) — no
+   * hay "basura silenciosa" que evitar en las filas intermedias, así que a propósito solo se anota
+   * la fila que COMPLETA una sesión válida; las intermedias quedan totalmente afuera del Map y
+   * siguen decodificando exactamente igual que hoy. */
+  const TP_MAX_LEN = 1785; // techo duro de J1939-21 TP estándar (Extended TP queda fuera de alcance)
+  const TP_GAP_S = 3.0;    // generoso frente a los ~45ms reales de BAM; cubre los timers T2/T3 de RTS/CTS con margen — análisis offline por lote, sin costo por ser generoso
+  function buildTpReassembly() {
+    const tp = new Map();
+    const sessions = new Map(); // "chan:B:sa" | "chan:R:sa:ps" -> {pgn, expectedLen, expectedSn, bytes, lastT}
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      const pf = (r.id >> 16) & 0xff;
+      if (pf !== 0xec && pf !== 0xeb) continue;
+      const ps = (r.id >> 8) & 0xff, sa = r.id & 0xff;
+      if (pf === 0xec) {
+        if (r.data.length < 8) continue;
+        const ctrl = r.data[0];
+        const totalSize = r.data[1] | (r.data[2] << 8);
+        const pgn = r.data[5] | (r.data[6] << 8) | (r.data[7] << 16);
+        if (ctrl === 0x20 && ps === 0xff && totalSize > 8 && totalSize <= TP_MAX_LEN) { // BAM
+          sessions.set(r.channel + ":B:" + sa, { pgn, expectedLen: totalSize, expectedSn: 1, bytes: [], lastT: r.t });
+        } else if (ctrl === 0x10 && ps !== 0xff && totalSize > 8 && totalSize <= TP_MAX_LEN) { // RTS
+          sessions.set(r.channel + ":R:" + sa + ":" + ps, { pgn, expectedLen: totalSize, expectedSn: 1, bytes: [], lastT: r.t });
+        }
+        // CTS/EndOfMsgAck/Abort/otros: no-op — la finalización depende solo del largo declarado, así
+        // que una transferencia abortada simplemente nunca llega a completarse (ya es seguro).
+        continue; // las filas TP.CM nunca entran al Map — siguen decodificando sus propios campos.
+      }
+      // pf === 0xeb (TP.DT)
+      const key = ps === 0xff ? (r.channel + ":B:" + sa) : (r.channel + ":R:" + sa + ":" + ps);
+      const s = sessions.get(key);
+      if (!s) continue; // continuación huérfana, sin sesión abierta -> fila intacta, decodifica como hoy
+      const sn = r.data[0];
+      if (sn !== s.expectedSn || r.t - s.lastT > TP_GAP_S) { sessions.delete(key); continue; }
+      for (const b of r.data.slice(1)) s.bytes.push(b);
+      s.expectedSn++;
+      s.lastT = r.t;
+      if (s.bytes.length >= s.expectedLen) {
+        const data = Uint8Array.from(s.bytes.slice(0, s.expectedLen));
+        const chanEntry = state.channelDbc[normalizeChannel(r.channel)];
+        const dbc = chanEntry ? chanEntry.dbc : null;
+        const msg = dbc ? resolveMessageByPgn(dbc, s.pgn, sa) : null;
+        if (dbc && msg) tp.set(i, { dbc, msg, data }); // solo la fila que completa la sesión se anota
+        sessions.delete(key);
+      }
+    }
+    state.tpReassembly = tp;
+  }
+
+  // Resuelve qué mensaje del DBC corresponde a un PGN+dirección-origen dado, ignorando los bits de
+  // prioridad del ID (necesario: en datos reales el frame TP.CM anunciante puede usar una prioridad
+  // distinta a la que el DBC declaró para el mensaje de aplicación). Índice cacheado en el propio
+  // objeto dbc — se reconstruye solo, ya que applyChannelDbc crea un dbc nuevo en cada asignación.
+  function resolveMessageByPgn(dbc, pgn, sourceAddress) {
+    if (!dbc._pgnSaIndex) {
+      const idx = new Map();
+      for (const msg of dbc.messages.values()) {
+        const mpf = (msg.id >> 16) & 0xff, mps = (msg.id >> 8) & 0xff, mdp = (msg.id >> 24) & 1, msa = msg.id & 0xff;
+        const mpgn = mpf >= 240 ? (mdp << 16) | (mpf << 8) | mps : (mdp << 16) | (mpf << 8);
+        const key = mpgn + ":" + msa;
+        if (!idx.has(key)) idx.set(key, msg); // primer BO_ del archivo gana ante un duplicado (no observado, pero posible)
+      }
+      dbc._pgnSaIndex = idx;
+    }
+    return dbc._pgnSaIndex.get(pgn + ":" + sourceAddress) || null;
   }
 
   /* ---------- señales con más variaciones de estado ---------- */
@@ -2243,59 +2321,88 @@
       return;
     }
     const r = state.trace[rowIdx];
-    const dbc = findDbcForChannelId(r.channel, r.id);
-    const hexId = "0x" + r.id.toString(16).toUpperCase();
-    const data = dbc ? effectiveFrameData(rowIdx) : null;
-    const reassembled = !!data && data !== r.data; // effectiveFrameData gave back a distinct buffer, not this row's own bytes
-    const decoded = data ? decodeMessage(dbc, r.id, data) : null;
+    const tpEntry = state.tpReassembly.get(rowIdx);
 
     let html = "";
-    if (!dbc) {
-      html += `<div class="sig-header"><div class="msgname unknown">${hexId} — not defined</div>
-        <div class="msgmeta"><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
-        <div class="comment">This ID isn't recognized by any of the loaded DBC files.</div></div>`;
-    } else if (!data) {
-      const msg = dbc.messages.get(r.id);
-      html += `<div class="sig-header">
-        <div class="msgname">${escapeHtml(msg.name)}</div>
-        <div class="msgmeta">
-          <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
-          ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
-        </div>
-        <div class="comment">Part of a multi-frame message — select the frame that completes it to see decoded signals.</div>
-      </div>`;
-    } else {
-      const msg = decoded.message;
+    if (tpEntry) {
+      // Esta fila TP.DT completó una sesión válida de J1939 Transport Protocol (BAM/RTS-CTS) —
+      // decodificar el mensaje de aplicación resuelto (ej. RC_0F), no los campos propios de la fila.
+      const decoded = decodeMessage(tpEntry.dbc, tpEntry.msg.id, tpEntry.data);
+      const msg = decoded.message, data = tpEntry.data;
       const truncated = msg.dlc > data.length;
+      const hexId = "0x" + msg.id.toString(16).toUpperCase();
       html += `<div class="sig-header">
         <div class="msgname">${escapeHtml(msg.name)}</div>
         <div class="msgmeta">
           <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
           ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
         </div>
-        ${!reassembled && truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-packet</span> <span class="comment" style="display:inline">DBC defines ${msg.dlc} bytes; captured frame has ${data.length} — out-of-range signals are skipped.</span></div>` : ""}
-        ${reassembled ? `<div style="margin-top:6px"><span class="badge ok">reassembled</span> <span class="comment" style="display:inline">${data.length} bytes reassembled from multiple frames${truncated ? ` (DBC defines up to ${msg.dlc}; this transmission used fewer — some optional signals aren't present)` : ""}.</span></div>` : ""}
+        <div style="margin-top:6px"><span class="badge ok">reassembled</span> <span class="comment" style="display:inline">${data.length} bytes reassembled from J1939 Transport Protocol frames (captured as 0x${r.id.toString(16).toUpperCase()})${truncated ? ` — DBC defines up to ${msg.dlc}; this transmission used fewer, some optional signals aren't present` : ""}.</span></div>
         ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
       </div>`;
-      if (msg.isMultiplexed) {
-        const muxSig = msg.signals.find((s) => s.isMultiplexor && s.muxValue === null);
-        html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — showing the active signal subset</div>`;
-      }
-      html += '<div class="raw-bytes">' + Array.from(data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
-      html += '<div class="sig-table">';
-      if (decoded.signals.length === 0) html += '<div class="sig-empty">No signals visible in this frame.</div>';
-      for (const sg of decoded.signals) {
-        const hasLabel = sg.label !== null;
-        const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
-        html += `<div class="sig-row" data-channel="${r.channel}" data-id="${r.id}" data-msg="${escapeHtml(msg.name)}" data-sig="${escapeHtml(sg.name)}">
-          <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
-          <div class="sraw">raw: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
-          ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
+      html += renderDecodedMessageBody(r, msg, data, decoded);
+    } else {
+      const dbc = findDbcForChannelId(r.channel, r.id);
+      const hexId = "0x" + r.id.toString(16).toUpperCase();
+      const data = dbc ? effectiveFrameData(rowIdx) : null;
+      const reassembled = !!data && data !== r.data; // effectiveFrameData gave back a distinct buffer, not this row's own bytes
+      const decoded = data ? decodeMessage(dbc, r.id, data) : null;
+
+      if (!dbc) {
+        html += `<div class="sig-header"><div class="msgname unknown">${hexId} — not defined</div>
+          <div class="msgmeta"><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
+          <div class="comment">This ID isn't recognized by any of the loaded DBC files.</div></div>`;
+      } else if (!data) {
+        const msg = dbc.messages.get(r.id);
+        html += `<div class="sig-header">
+          <div class="msgname">${escapeHtml(msg.name)}</div>
+          <div class="msgmeta">
+            <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
+            ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
+          </div>
+          <div class="comment">Part of a multi-frame message — select the frame that completes it to see decoded signals.</div>
         </div>`;
+      } else {
+        const msg = decoded.message;
+        const truncated = msg.dlc > data.length;
+        html += `<div class="sig-header">
+          <div class="msgname">${escapeHtml(msg.name)}</div>
+          <div class="msgmeta">
+            <span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span>
+            ${msg.sender ? `<span>Sender: ${escapeHtml(msg.sender)}</span>` : ""}
+          </div>
+          ${!reassembled && truncated ? `<div style="margin-top:6px"><span class="badge warn">multi-packet</span> <span class="comment" style="display:inline">DBC defines ${msg.dlc} bytes; captured frame has ${data.length} — out-of-range signals are skipped.</span></div>` : ""}
+          ${reassembled ? `<div style="margin-top:6px"><span class="badge ok">reassembled</span> <span class="comment" style="display:inline">${data.length} bytes reassembled from multiple frames${truncated ? ` (DBC defines up to ${msg.dlc}; this transmission used fewer — some optional signals aren't present)` : ""}.</span></div>` : ""}
+          ${msg.comment ? `<div class="comment">${escapeHtml(msg.comment)}</div>` : ""}
+        </div>`;
+        html += renderDecodedMessageBody(r, msg, data, decoded);
       }
-      html += "</div>";
     }
     panel.innerHTML = html;
+  }
+
+  // Cuerpo compartido del panel de señales para un mensaje ya decodificado: nota de multiplexado,
+  // tira de bytes crudos y tabla de señales. Usado tanto por el caso normal como por el de J1939 TP.
+  function renderDecodedMessageBody(r, msg, data, decoded) {
+    let html = "";
+    if (msg.isMultiplexed) {
+      const muxSig = msg.signals.find((s) => s.isMultiplexor && s.muxValue === null);
+      html += `<div class="mux-note">Multiplexor ${muxSig ? escapeHtml(muxSig.name) : ""} = ${decoded.muxVal} — showing the active signal subset</div>`;
+    }
+    html += '<div class="raw-bytes">' + Array.from(data).map((b) => `<span class="raw-byte mono">${b.toString(16).toUpperCase().padStart(2, "0")}</span>`).join("") + "</div>";
+    html += '<div class="sig-table">';
+    if (decoded.signals.length === 0) html += '<div class="sig-empty">No signals visible in this frame.</div>';
+    for (const sg of decoded.signals) {
+      const hasLabel = sg.label !== null;
+      const valStr = hasLabel ? escapeHtml(sg.label) : formatNum(sg.value);
+      html += `<div class="sig-row" data-channel="${r.channel}" data-id="${r.id}" data-msg="${escapeHtml(msg.name)}" data-sig="${escapeHtml(sg.name)}">
+        <div class="top"><span class="sname">${escapeHtml(sg.name)}${sg.isMultiplexor ? " ⚑" : ""}</span><span class="sval">${valStr}${!hasLabel && sg.unit ? `<span class="unit">${escapeHtml(sg.unit)}</span>` : ""}</span></div>
+        <div class="sraw">raw: ${sg.raw}${hasLabel ? ` · ${formatNum(sg.value)}${sg.unit ? " " + escapeHtml(sg.unit) : ""}` : ""} · ${formatBitSpec(sg)}</div>
+        ${sg.comment ? `<div class="scomment">${escapeHtml(sg.comment)}</div>` : ""}
+      </div>`;
+    }
+    html += "</div>";
+    return html;
   }
 
   function formatNum(v) {
