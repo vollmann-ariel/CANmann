@@ -1273,7 +1273,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.1.0";
+  const APP_VERSION = "6.2.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2406,9 +2406,22 @@
   }
 
   function formatNum(v) {
-    if (Math.abs(v) >= 1e12) return v.toExponential(4);
+    if (v !== 0 && Math.abs(v) >= 1e12) return v.toExponential(4);
+    // Un valor no nulo que redondearía a "0.000" con 3 decimales (ej. señales NMEA2000 "Lo" de
+    // latitud/longitud, factor 1e-16) quedaría invisible pese a variar de verdad — notación
+    // científica en su lugar, simétrico al caso de números muy grandes de arriba.
+    if (v !== 0 && Math.abs(v) < 0.001) return v.toExponential(4);
     const r = Math.round(v * 1000) / 1000;
     return r.toLocaleString("en-US", { maximumFractionDigits: 3 });
+  }
+
+  // Resolución completa para la vista de tabla de un lane ("View as table"): a diferencia de
+  // formatNum (usado también por las etiquetas del eje del gráfico y el readout en vivo, donde
+  // 3 decimales alcanzan y sobran), acá hay espacio de sobra por fila — String(v) da la
+  // representación decimal más corta que reproduce exactamente el double, sin ceros de ruido de
+  // punto flotante y sin el techo de 3 decimales, cambiando SOLO la tabla.
+  function formatNumFull(v) {
+    return String(v);
   }
 
   /* ---------- playback ---------- */
@@ -2748,7 +2761,7 @@
       const tr = document.createElement("tr");
       const tdT = document.createElement("td"); tdT.className = "mono"; tdT.textContent = (p.t - state.t0).toFixed(4);
       const tdV = document.createElement("td");
-      tdV.textContent = p.label !== null ? p.label : formatNum(p.value) + (s.unit ? " " + s.unit : "");
+      tdV.textContent = p.label !== null ? p.label : formatNumFull(p.value) + (s.unit ? " " + s.unit : "");
       tr.appendChild(tdT); tr.appendChild(tdV);
       tbody.appendChild(tr);
     }
