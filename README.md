@@ -16,7 +16,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 ## Trace tab
 
 - Virtualized table (handles hundreds of thousands of messages without lag), with filtering by ID/name/channel — `*` works as a wildcard, Escape clears it — and a "decoded only" toggle.
-- Decoded signal panel when a message is selected: physical value, raw value, unit, `VAL_` table labels, multiplexing (including extended/cascaded multiplexors, `SG_MUL_VAL_`), DBC comments, and a warning when a multi-packet J1939 message (e.g. DM1) exceeds the 8 bytes of the captured frame. Right-click a signal to add/remove it from the Plots area, or to copy its name (or its message's).
+- Decoded signal panel when a message is selected: physical value, raw value, unit, `VAL_` table labels, multiplexing (including extended/cascaded multiplexors, `SG_MUL_VAL_`), DBC comments, and a warning when a message still exceeds the 8 bytes of a single captured frame. Multi-frame messages are reassembled automatically before decoding — NMEA2000 "Fast Packet" (e.g. GNSS position PGNs) and classic J1939 Transport Protocol (BAM and RTS/CTS) — so their real signals decode correctly; select the frame that completes the sequence to see them. Right-click a signal to add/remove it from the Plots area, or to copy its name (or its message's).
 - Trace playback with a speed control.
 - "Messages Seen" list sorted by frequency, with a green/red indicator for decoded vs. unknown, each message's channel and source, and search by any of those (name, ID, or source — `*` works as a wildcard, Escape clears it). Right-click a message or signal name to copy it.
 - "Most Active": ranks signals by how many times their value actually changed — not just how often the message was transmitted — showing each signal's channel and source too, with its own search box (same wildcard/Escape behavior). In Plots, clicking a row adds/removes it from the chart, and right-click also offers "Explore message" (jump to it in "Messages Seen"). In Trace, clicking a row filters to that signal's message instead — the same as clicking it in "Messages Seen" — and right-click offers "Insert in plot area" in place of "Explore message". Either tab's menu can also filter the list down to just that message's signals, or copy its message/signal name.
@@ -25,9 +25,9 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 
 - Pick any DBC-recognized signal (from the message list, the "Most Active" panel, or the search box — each showing its message, channel, and source; the search box also takes `*` as a wildcard, Escape clears/closes it) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
 - Step line (a CAN signal holds its value until the next message).
-- Synchronized cursor across every lane, with a readout panel showing each signal's value (with its unit and DBC description) and the real timestamp of its last message — each lane's own header mirrors that value and unit for at-a-glance reading. Drag a readout row to reorder its lane, or click it to jump straight there.
+- Synchronized cursor across every lane, with a readout panel showing each signal's value (with its unit and DBC description) and the real timestamp of its last message — the readout stays compact (switching to scientific notation for very small magnitudes rather than showing a misleading "0"), while each lane's own header mirrors that same value at full precision. Drag a readout row to reorder its lane, or click it to jump straight there.
 - Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
-- Alternative table view for each signal.
+- Alternative table view for each signal, with values shown at full precision.
 - Measure the time between two points: click the ruler button, then click two spots on any chart to see the elapsed time between them.
 - Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans to center each one.
 
@@ -47,6 +47,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 
 - Light/dark theme follows the OS preference automatically.
 - Toggle the left panel, toolbar, and right panel independently to make room on smaller screens.
+- Every filter/search field (Trace, Messages Seen, Most Active, Plots, DBC Edit) selects its existing text when focused, so typing replaces it directly instead of requiring it to be cleared first.
 
 ## Supported file formats
 
@@ -55,7 +56,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 | DBC | Windows-1252, standard syntax (`BO_`, `SG_`, `VAL_`, `CM_`), including extended/cascaded multiplexing (`SG_MUL_VAL_`) and floating-point signals (`SIG_VALTYPE_`) |
 | Log | `.csv` (`Timestamp,CAN_ID,DLC,Data`) or `.asc` (Vector ASCII, multi-channel) |
 
-Bit-level decoding (Intel/Motorola, signed values, multiplexing, multi-packet message truncation) was validated against [`cantools`](https://github.com/cantools/cantools) before the first version shipped, and against real production DBC files since.
+Bit-level decoding (Intel/Motorola, signed values, multiplexing, multi-frame reassembly — NMEA2000 Fast Packet and J1939 Transport Protocol — and truncation of messages that still exceed a single captured frame) was validated against [`cantools`](https://github.com/cantools/cantools) before the first version shipped, and against real production DBC files since.
 
 The app checks its own GitHub repo on startup and shows a banner if a newer version is available; updating overwrites the local file in place (or downloads it, in browsers without that capability).
 

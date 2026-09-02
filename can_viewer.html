@@ -1273,7 +1273,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.2.0";
+  const APP_VERSION = "6.4.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -3059,18 +3059,19 @@
         row.appendChild(desc);
       }
       panel.appendChild(row);
-      if (s.el && s.el.lval) renderValueWithUnit(s.el.lval, vp, s.unit);
+      if (s.el && s.el.lval) renderValueWithUnit(s.el.lval, vp, s.unit, true);
     }
   }
 
   // Fills an element with a signal's current value the same way in both the chart readout
   // (.rval) and the lane header (.lval): the value-table label if there is one, otherwise the
-  // formatted number with its unit as a dimmer trailing span.
-  function renderValueWithUnit(target, vp, unit) {
+  // formatted number with its unit as a dimmer trailing span. `full` selects formatNumFull (same
+  // uncapped precision as "View as table") instead of the compact formatNum — used for .lval only.
+  function renderValueWithUnit(target, vp, unit, full) {
     target.textContent = "";
     if (!vp) { target.textContent = "—"; return; }
     if (vp.label !== null) { target.textContent = vp.label; return; }
-    target.textContent = formatNum(vp.value);
+    target.textContent = full ? formatNumFull(vp.value) : formatNum(vp.value);
     if (unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = unit; target.appendChild(u); }
   }
 
@@ -3306,6 +3307,12 @@
   });
   wireDrop("logDrop", "logInput", (files) => loadLogFile(files[0]));
 
+  // Al enfocar un campo de filtro/búsqueda con contenido ya escrito, seleccionarlo entero — así
+  // el usuario puede tipear directamente para sobreescribirlo, sin borrar a mano primero.
+  function selectAllOnFocus(inputEl) {
+    inputEl.addEventListener("focus", () => { if (inputEl.value) inputEl.select(); });
+  }
+
   let searchDebounce;
   el("traceSearch").addEventListener("input", () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(applyFilter, 150); });
   // traceSearch no despliega un menú propio (filtra la tabla in-place), así que "cerrar con
@@ -3313,15 +3320,18 @@
   el("traceSearch").addEventListener("keydown", (e) => {
     if (e.key === "Escape" && el("traceSearch").value) { el("traceSearch").value = ""; applyFilter(); }
   });
+  selectAllOnFocus(el("traceSearch"));
   el("onlyDecoded").addEventListener("change", applyFilter);
   el("msgSearch").addEventListener("input", renderMessageList);
   el("msgSearch").addEventListener("keydown", (e) => {
     if (e.key === "Escape" && el("msgSearch").value) { el("msgSearch").value = ""; renderMessageList(); }
   });
+  selectAllOnFocus(el("msgSearch"));
   el("varSearch").addEventListener("input", () => { state.varMsgFilter = null; renderVarList(); });
   el("varSearch").addEventListener("keydown", (e) => {
     if (e.key === "Escape" && el("varSearch").value) { el("varSearch").value = ""; state.varMsgFilter = null; renderVarList(); }
   });
+  selectAllOnFocus(el("varSearch"));
 
   document.querySelectorAll(".block h2").forEach((h2) => {
     h2.addEventListener("click", () => {
@@ -3356,6 +3366,7 @@
     // clearing the query also closes the dropdown, since renderChartAddResults() hides it on an empty query
     if (e.key === "Escape" && el("chartAddInput").value) { el("chartAddInput").value = ""; renderChartAddResults(); }
   });
+  selectAllOnFocus(el("chartAddInput"));
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
   window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
   wireChartInteraction();
@@ -3929,6 +3940,9 @@
   el("dbeMsgSearch").addEventListener("keydown", (e) => {
     if (e.key === "Escape" && el("dbeMsgSearch").value) { el("dbeMsgSearch").value = ""; renderMessageList(); }
   });
+  // Enfocar con contenido ya escrito lo selecciona entero, para poder sobreescribirlo tipeando
+  // directamente (mismo comportamiento que los campos de filtro del visor principal).
+  el("dbeMsgSearch").addEventListener("focus", () => { if (el("dbeMsgSearch").value) el("dbeMsgSearch").select(); });
 
   el("addMsgBtn").addEventListener("click", () => {
     const model = state.model;
