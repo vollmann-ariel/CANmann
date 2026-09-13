@@ -8,7 +8,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 
 ## Usage
 
-1. Open `can_viewer.html` in Chrome/Edge (needs `<input type="file">`, drag & drop, Canvas 2D).
+1. Open `can_viewer.html` in Chrome/Edge (needs `<input type="file">`, drag & drop, Canvas 2D) — or try it straight from the browser, no download needed, at [vollmann-ariel.github.io/CANmann/can_viewer.html](https://vollmann-ariel.github.io/CANmann/can_viewer.html).
 2. **DBC files**: load one or more `.dbc` files. Every file you load is remembered across sessions (IndexedDB), so it stays listed — and available in the bus dropdowns below, with your last assignment pre-selected — even after closing and reopening the app.
 3. **CAN log**: load a `.csv` (format `Timestamp,CAN_ID,DLC,Data`, the one `CANmann.py` produces) or an `.asc` (Vector ASCII).
 4. Assign one DBC per bus under **Bus → DBC Assignment** — only an assigned DBC is used to decode that bus's messages.
