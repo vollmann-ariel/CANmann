@@ -1273,7 +1273,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.4.0";
+  const APP_VERSION = "6.5.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2747,7 +2747,27 @@
         s.el.ctx = canvas.getContext("2d");
       }
     }
+    layoutChartLanes();
     requestRedraw();
+  }
+
+  // Grows each lane's canvas evenly past its CSS min-height (fixed at 92px) so that when few
+  // enough signals are plotted, they spread out to fill the visible chart-scroll area instead of
+  // leaving blank space below the last lane — never below that 92px floor when they don't all fit.
+  function layoutChartLanes() {
+    if (state.chart.tableView) return;
+    const canvases = [];
+    for (const key of state.chart.order) {
+      const s = state.chart.series.get(key);
+      if (s.el && s.el.canvas) { s.el.canvas.style.height = ""; canvases.push(s.el.canvas); }
+    }
+    if (canvases.length === 0) return;
+    const naturalHeight = el("chartStack").scrollHeight;
+    const availableHeight = el("chartScroll").clientHeight;
+    const extra = availableHeight - naturalHeight;
+    if (extra <= 0) return; // no caben todas al mínimo -> se deja el mínimo fijo, aparece scroll como antes
+    const perCanvas = extra / canvases.length;
+    for (const canvas of canvases) canvas.style.height = (canvas.getBoundingClientRect().height + perCanvas) + "px";
   }
 
   function buildLaneTable(s) {
@@ -3276,7 +3296,7 @@
       if (state.selectedRow !== null) scrollRowIntoView(state.selectedRow);
       renderVisibleRows();
     }
-    if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) requestRedraw(); }
+    if (tab === "graficas") { ensureFullRange(); if (state.chart.order.length > 0) { layoutChartLanes(); requestRedraw(); } }
   }
 
   /* ---------- misc UI wiring ---------- */
@@ -3289,7 +3309,7 @@
       btn.classList.toggle("collapsed", collapsed);
       btn.setAttribute("aria-pressed", String(!collapsed));
       document.querySelectorAll(selector).forEach((n) => n.classList.toggle("collapsed", collapsed));
-      if (state.tab === "graficas") requestRedraw();
+      if (state.tab === "graficas") { layoutChartLanes(); requestRedraw(); }
     });
   }
 
@@ -3368,7 +3388,7 @@
   });
   selectAllOnFocus(el("chartAddInput"));
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
-  window.addEventListener("resize", () => { if (state.tab === "graficas") requestRedraw(); });
+  window.addEventListener("resize", () => { if (state.tab === "graficas") { layoutChartLanes(); requestRedraw(); } });
   wireChartInteraction();
 
   wireLayoutToggle("toggleRailLeftBtn", ".rail-left");
