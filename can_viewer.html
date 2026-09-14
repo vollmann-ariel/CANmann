@@ -286,13 +286,15 @@
     display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); cursor: pointer; user-select: none;
   }
   .toggle input { accent-color: var(--accent); }
-  .playbar { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .toggle-group {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px;
+  }
   .iconbtn {
     display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
     border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); cursor: pointer;
   }
   .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
-  .iconbtn.playing { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .iconbtn.measuring { background: var(--cyan); border-color: var(--cyan); color: var(--accent-ink); }
   .result-count { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
 
@@ -832,25 +834,11 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           <input id="traceSearch" placeholder="Filter trace: ID, name, channel…" />
         </div>
-        <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Decoded only</label>
-        <span class="result-count" id="resultCount"></span>
-        <div class="playbar">
-          <button class="iconbtn" id="stepBackBtn" title="Previous message">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6L10 12l10 6z"/></svg>
-          </button>
-          <button class="iconbtn" id="playBtn" title="Play / pause">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-          <button class="iconbtn" id="stepFwdBtn" title="Next message">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2v12h2zM4 6l10 6-10 6z"/></svg>
-          </button>
-          <select id="speedSel">
-            <option value="1">1×</option>
-            <option value="5" selected>5×</option>
-            <option value="25">25×</option>
-            <option value="100">100×</option>
-          </select>
+        <div class="toggle-group" title="Only one of these can be active at a time">
+          <label class="toggle"><input type="checkbox" id="onlyDecoded" /> Decoded only</label>
+          <label class="toggle"><input type="checkbox" id="onlyUndecoded" /> Undecoded only</label>
         </div>
+        <span class="result-count" id="resultCount"></span>
       </div>
 
       <div class="trace-table">
@@ -1263,8 +1251,6 @@
     t0: 0,                 // trace start time, for display as relative seconds
     selectedRow: null,
     selectedMessageKey: null,
-    playing: false,
-    playTimer: null,
     tab: "graficas",
     varStats: null, // Map "chan:id:signal" -> {channel,id,signalName,msgName,unit,transitions,count} | null = sin calcular / desactualizado
     varMsgFilter: null, // {channel,id} | null — set by the "Filter by message" context-menu action; cleared as soon as the user types in #varSearch
@@ -1289,7 +1275,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.8.0";
+  const APP_VERSION = "7.0.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2317,8 +2303,9 @@
     const qRaw = (el("traceSearch").value || "").trim();
     const matcher = qRaw ? globToRegex(qRaw) : null;
     const onlyDecoded = el("onlyDecoded").checked;
+    const onlyUndecoded = el("onlyUndecoded").checked; // mutuamente excluyente con onlyDecoded — ver su wiring más abajo
 
-    if (!matcher && !onlyDecoded) {
+    if (!matcher && !onlyDecoded && !onlyUndecoded) {
       state.filtered = null;
     } else {
       const out = [];
@@ -2327,6 +2314,7 @@
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
         if (onlyDecoded && !def) continue;
+        if (onlyUndecoded && def) continue;
         if (matcher) {
           const hexId = "0x" + r.id.toString(16);
           let hit = matcher.test(hexId) || matcher.test(String(r.id)) || matcher.test(String(r.channel));
@@ -2560,8 +2548,8 @@
     return String(v);
   }
 
-  /* ---------- playback ---------- */
-  function currentPlayPos() {
+  /* ---------- navegación de filas (teclado) ---------- */
+  function currentRowPos() {
     if (state.selectedRow === null) return 0;
     return state.filtered === null ? state.selectedRow : Math.max(0, state.filtered.indexOf(state.selectedRow));
   }
@@ -2570,30 +2558,6 @@
     if (total === 0) return;
     pos = Math.max(0, Math.min(total - 1, pos));
     selectRow(rowAt(pos), true);
-  }
-  function stopPlay() {
-    state.playing = false;
-    clearTimeout(state.playTimer);
-    el("playBtn").classList.remove("playing");
-    el("playIcon").innerHTML = '<path d="M8 5v14l11-7z"/>';
-  }
-  function startPlay() {
-    const total = rowCount();
-    if (total === 0) return;
-    state.playing = true;
-    el("playBtn").classList.add("playing");
-    el("playIcon").innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
-    const speed = parseFloat(el("speedSel").value) || 5;
-    function tick() {
-      if (!state.playing) return;
-      let pos = currentPlayPos();
-      if (pos >= total - 1) { stopPlay(); return; }
-      const curT = state.trace[rowAt(pos)].t, nextT = state.trace[rowAt(pos + 1)].t;
-      const delayMs = Math.min(300, Math.max(4, ((nextT - curT) * 1000) / speed));
-      stepTo(pos + 1);
-      state.playTimer = setTimeout(tick, delayMs);
-    }
-    tick();
   }
 
   /* =========================================================
@@ -3502,7 +3466,14 @@
     if (e.key === "Escape" && el("traceSearch").value) { el("traceSearch").value = ""; applyFilter(); }
   });
   selectAllOnFocus(el("traceSearch"));
-  el("onlyDecoded").addEventListener("change", applyFilter);
+  el("onlyDecoded").addEventListener("change", () => {
+    if (el("onlyDecoded").checked) el("onlyUndecoded").checked = false; // mutuamente excluyentes, pero ambos pueden estar sin marcar
+    applyFilter();
+  });
+  el("onlyUndecoded").addEventListener("change", () => {
+    if (el("onlyUndecoded").checked) el("onlyDecoded").checked = false;
+    applyFilter();
+  });
   el("msgSearch").addEventListener("input", renderMessageList);
   el("msgSearch").addEventListener("keydown", (e) => {
     if (e.key === "Escape" && el("msgSearch").value) { el("msgSearch").value = ""; renderMessageList(); }
@@ -3526,16 +3497,19 @@
     });
   });
 
-  el("playBtn").addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
-  el("stepFwdBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() + 1); });
-  el("stepBackBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() - 1); });
   document.addEventListener("keydown", (ev) => {
-    if (state.tab !== "traza" || (ev.key !== "ArrowDown" && ev.key !== "ArrowUp")) return;
+    if (state.tab !== "traza") return;
     const tag = document.activeElement && document.activeElement.tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return; // no robar flechas a un campo de texto/combo enfocado
-    ev.preventDefault();
-    stopPlay();
-    stepTo(currentPlayPos() + (ev.key === "ArrowDown" ? 1 : -1));
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return; // no robar teclas de navegación a un campo de texto/combo enfocado
+    // PageUp/PageDown avanzan tantas filas como entran en el viewport actual (se recalcula en cada
+    // pulsación, así que sigue siendo correcto si la ventana cambia de tamaño entre medio).
+    const pageSize = Math.max(1, Math.floor(viewport.clientHeight / ROW_H));
+    if (ev.key === "ArrowDown") { ev.preventDefault(); stepTo(currentRowPos() + 1); }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); stepTo(currentRowPos() - 1); }
+    else if (ev.key === "PageDown") { ev.preventDefault(); stepTo(currentRowPos() + pageSize); }
+    else if (ev.key === "PageUp") { ev.preventDefault(); stepTo(currentRowPos() - pageSize); }
+    else if (ev.key === "Home") { ev.preventDefault(); stepTo(0); }
+    else if (ev.key === "End") { ev.preventDefault(); stepTo(rowCount() - 1); }
   });
 
   el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
