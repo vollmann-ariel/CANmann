@@ -320,6 +320,8 @@
   .trace-row .c-name { color: var(--ink-dim); }
   .trace-row .c-name.unknown { color: var(--ink-faint); font-style: italic; }
   .trace-row .c-data { color: var(--ink-dim); }
+  .trace-row .c-data .byte-up { color: var(--ok); font-weight: 700; }
+  .trace-row .c-data .byte-down { color: var(--critical); font-weight: 700; }
   .chan-tag {
     display: inline-block; min-width: 16px; text-align: center; font-weight: 700; font-size: 10px;
     background: var(--surface-3); border-radius: 4px; padding: 1px 4px;
@@ -1239,6 +1241,7 @@
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
     trace: [],
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
+    prevSameIdRow: [],    // rowIndex -> index of the previous row with the same channel+id, or -1 — ver buildPrevSameIdIndex
     fastPacket: new Map(), // rowIndex -> Uint8Array | null — ver buildFastPacketReassembly/effectiveFrameData
     tpReassembly: new Map(), // rowIndex -> {dbc, msg, data: Uint8Array} — solo la fila que COMPLETA una sesión
     // J1939 Transport Protocol (BAM/RTS-CTS) válida; ver buildTpReassembly. A diferencia de fastPacket es de
@@ -1273,7 +1276,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.5.0";
+  const APP_VERSION = "6.6.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1655,6 +1658,7 @@
   /* ---------- message index / stats ---------- */
   function recomputeAll() {
     buildMessageIndex();
+    buildPrevSameIdIndex();
     buildFastPacketReassembly();
     buildTpReassembly();
     renderStats();
@@ -1680,6 +1684,20 @@
       e.lastRow = i;
     }
     state.msgIndex = idx;
+  }
+
+  // Para cada fila, el índice de la fila anterior con el mismo canal+id (o -1 si es la primera vez
+  // que aparece) — usado por el coloreado rojo/verde de bytes en la Traza (ver renderVisibleRows).
+  function buildPrevSameIdIndex() {
+    const lastSeen = new Map();
+    const prev = new Array(state.trace.length);
+    for (let i = 0; i < state.trace.length; i++) {
+      const r = state.trace[i];
+      const key = r.channel + ":" + r.id;
+      prev[i] = lastSeen.has(key) ? lastSeen.get(key) : -1;
+      lastSeen.set(key, i);
+    }
+    state.prevSameIdRow = prev;
   }
 
   /* ---------- reensamblado NMEA2000 "Fast Packet" ----------
@@ -2257,6 +2275,23 @@
     for (let i = 0; i < data.length; i++) s += (i ? " " : "") + data[i].toString(16).toUpperCase().padStart(2, "0");
     return s;
   }
+  // Igual que fmtData, pero como HTML con cada byte envuelto en un span rojo/verde si bajó/subió
+  // respecto al mismo byte en prevData (mensaje anterior con el mismo canal+id) — solo se usa para
+  // mensajes sin decodificar, al estilo SavvyCAN. Sin prevData (primera vez que aparece este id) o
+  // byte sin cambios, se deja sin colorear.
+  function fmtDataWithDiff(data, prevData) {
+    let s = "";
+    for (let i = 0; i < data.length; i++) {
+      const hex = data[i].toString(16).toUpperCase().padStart(2, "0");
+      let cls = null;
+      if (prevData && i < prevData.length) {
+        if (data[i] > prevData[i]) cls = "byte-up";
+        else if (data[i] < prevData[i]) cls = "byte-down";
+      }
+      s += (i ? " " : "") + (cls ? `<span class="${cls}">${hex}</span>` : hex);
+    }
+    return s;
+  }
 
   function renderVisibleRows() {
     const total = rowCount();
@@ -2289,7 +2324,13 @@
       nameEl.textContent = def ? def.name : "—";
       nameEl.className = "c-name" + (def ? "" : " unknown");
       d.querySelector(".c-dlc").textContent = r.dlc;
-      d.querySelector(".c-data").textContent = fmtData(r.data);
+      const dataEl = d.querySelector(".c-data");
+      if (!def) {
+        const prevIdx = state.prevSameIdRow[rowIdx];
+        dataEl.innerHTML = fmtDataWithDiff(r.data, prevIdx === -1 ? null : state.trace[prevIdx].data);
+      } else {
+        dataEl.textContent = fmtData(r.data);
+      }
       d.className = "trace-row" + (rowIdx === state.selectedRow ? " selected" : "");
       d.onclick = () => selectRow(rowIdx, false);
       rowsEl.appendChild(d);
@@ -3368,6 +3409,14 @@
   el("playBtn").addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
   el("stepFwdBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() + 1); });
   el("stepBackBtn").addEventListener("click", () => { stopPlay(); stepTo(currentPlayPos() - 1); });
+  document.addEventListener("keydown", (ev) => {
+    if (state.tab !== "traza" || (ev.key !== "ArrowDown" && ev.key !== "ArrowUp")) return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return; // no robar flechas a un campo de texto/combo enfocado
+    ev.preventDefault();
+    stopPlay();
+    stepTo(currentPlayPos() + (ev.key === "ArrowDown" ? 1 : -1));
+  });
 
   el("tabTrazaBtn").addEventListener("click", () => setTab("traza"));
   el("tabGraficasBtn").addEventListener("click", () => setTab("graficas"));
