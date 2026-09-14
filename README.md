@@ -31,6 +31,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Alternative table view for each signal, with values shown at full precision.
 - Measure the time between two points: click the ruler button, then click two spots on any chart to see the elapsed time between them.
 - Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans to center each one.
+- Right-click a lane for "Jump to time in Trace": switches tabs and selects the first message at or after that instant, across any id.
 
 ## DBC Edit tab
 
