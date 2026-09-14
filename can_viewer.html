@@ -952,6 +952,12 @@
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="sigCtxCancel" role="menuitem">Cancel</button>
 </div>
 
+<div class="ctx-menu" id="traceCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="traceCtxFilterMsg" role="menuitem">Filter by message id</button>
+  <button type="button" class="ctx-menu-item" id="traceCtxJumpPlot" role="menuitem">Jump to time in Plots</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="traceCtxCancel" role="menuitem">Cancel</button>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -1270,13 +1276,15 @@
       tableView: false,
       drag: null,          // {startClientX, startRange}
       measure: { active: false, t1: null, t2: null }, // manual measurement; t1/t2 are absolute timestamps, same units as points[].t
+      jumpMarkerT: null,   // pinned marker set by "Jump to time in Plots" (Trace context menu); persists across
+                           // hover/pan and is only cleared by the next plain click on the chart area (wireChartInteraction)
     },
   };
 
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.6.0";
+  const APP_VERSION = "6.7.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2112,6 +2120,50 @@
     });
   });
 
+  /* ---------- Trace table: right-click "filter / jump to plot" context menu ---------- */
+  let traceCtxTarget = null; // { id, t } — the row's raw CAN id and absolute timestamp
+  function openTraceContextMenu(x, y, target) {
+    traceCtxTarget = target;
+    const menu = el("traceCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeTraceContextMenu() {
+    traceCtxTarget = null;
+    el("traceCtxMenu").classList.remove("open");
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("traceCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeTraceContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeTraceContextMenu(); });
+  el("traceCtxCancel").addEventListener("click", closeTraceContextMenu);
+  el("traceCtxFilterMsg").addEventListener("click", () => {
+    if (traceCtxTarget) filterToMessage({ id: traceCtxTarget.id, name: null });
+    closeTraceContextMenu();
+  });
+  el("traceCtxJumpPlot").addEventListener("click", () => {
+    if (traceCtxTarget) jumpToTimeInPlots(traceCtxTarget.t);
+    closeTraceContextMenu();
+  });
+
+  // Cambia a la pestaña Plots, centra la ventana visible (sin tocar el zoom actual si el instante ya
+  // se veía — ver focusRangeOnTime) en t, y deja un marcador naranja fijo ahí, distinto del cursor de
+  // hover que ya existe: no se mueve con el mouse, solo lo borra el próximo click sobre el área del
+  // gráfico (ver wireChartInteraction). La vista de tabla no tiene forma de mostrar un instante puntual
+  // (no está acotada por rango de tiempo), así que se desactiva para que el marcador sea visible.
+  function jumpToTimeInPlots(t) {
+    ensureFullRange();
+    focusRangeOnTime(t);
+    state.chart.jumpMarkerT = t;
+    if (state.chart.tableView) { state.chart.tableView = false; el("chartTableToggle").checked = false; buildLaneVisuals(); }
+    setTab("graficas");
+    requestRedraw();
+  }
+
   function renderStats() {
     const strip = el("statsStrip");
     if (state.trace.length === 0) { strip.innerHTML = ""; return; }
@@ -2333,6 +2385,7 @@
       }
       d.className = "trace-row" + (rowIdx === state.selectedRow ? " selected" : "");
       d.onclick = () => selectRow(rowIdx, false);
+      d.oncontextmenu = (ev) => { ev.preventDefault(); openTraceContextMenu(ev.clientX, ev.clientY, { id: r.id, t: r.t }); };
       rowsEl.appendChild(d);
     }
   }
@@ -2941,6 +2994,20 @@
       }
     }
 
+    if (state.chart.jumpMarkerT !== null && state.chart.jumpMarkerT >= t0 && state.chart.jumpMarkerT <= t1) {
+      const jx = Math.round(xOf(state.chart.jumpMarkerT)) + 0.5;
+      const accent = styles.getPropertyValue("--accent").trim();
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(jx, marginT); ctx.lineTo(jx, h - marginB); ctx.stroke();
+      const jvp = valueAtTime(pts, state.chart.jumpMarkerT);
+      if (jvp) {
+        const jpy = Math.round(yOf(jvp.value)) + 0.5;
+        ctx.fillStyle = accent;
+        ctx.beginPath(); ctx.arc(jx, jpy, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = styles.getPropertyValue("--surface").trim(); ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+
     for (const mt of [state.chart.measure.t1, state.chart.measure.t2]) {
       if (mt === null || mt < t0 || mt > t1) continue;
       const mx = Math.round(xOf(mt)) + 0.5;
@@ -3235,8 +3302,9 @@
     });
     stack.addEventListener("pointerup", (e) => {
       if (state.chart.drag) {
-        if (state.chart.measure.active && state.chart.drag.mode === null && state.chart.hoverT !== null) {
-          placeMeasurePoint(state.chart.hoverT);
+        if (state.chart.drag.mode === null) {
+          if (state.chart.measure.active && state.chart.hoverT !== null) placeMeasurePoint(state.chart.hoverT);
+          if (state.chart.jumpMarkerT !== null) { state.chart.jumpMarkerT = null; requestRedraw(); } // un click liso sobre el gráfico borra el marcador fijo de "Jump to time in Plots"
         }
         try { stack.releasePointerCapture(e.pointerId); } catch (err) {}
         state.chart.drag = null;
