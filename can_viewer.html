@@ -958,6 +958,11 @@
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="traceCtxCancel" role="menuitem">Cancel</button>
 </div>
 
+<div class="ctx-menu" id="chartCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="chartCtxJumpTrace" role="menuitem">Jump to time in Trace</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="chartCtxCancel" role="menuitem">Cancel</button>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -1284,7 +1289,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "6.7.0";
+  const APP_VERSION = "6.8.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2150,6 +2155,32 @@
     closeTraceContextMenu();
   });
 
+  /* ---------- Plots area: right-click "jump to trace" context menu ---------- */
+  let chartCtxTarget = null; // { t } — the absolute timestamp under the click
+  function openChartContextMenu(x, y, target) {
+    chartCtxTarget = target;
+    const menu = el("chartCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeChartContextMenu() {
+    chartCtxTarget = null;
+    el("chartCtxMenu").classList.remove("open");
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("chartCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeChartContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeChartContextMenu(); });
+  el("chartCtxCancel").addEventListener("click", closeChartContextMenu);
+  el("chartCtxJumpTrace").addEventListener("click", () => {
+    if (chartCtxTarget) jumpToMessageInTrace(chartCtxTarget.t);
+    closeChartContextMenu();
+  });
+
   // Cambia a la pestaña Plots, centra la ventana visible (sin tocar el zoom actual si el instante ya
   // se veía — ver focusRangeOnTime) en t, y deja un marcador naranja fijo ahí, distinto del cursor de
   // hover que ya existe: no se mueve con el mouse, solo lo borra el próximo click sobre el área del
@@ -2162,6 +2193,17 @@
     if (state.chart.tableView) { state.chart.tableView = false; el("chartTableToggle").checked = false; buildLaneVisuals(); }
     setTab("graficas");
     requestRedraw();
+  }
+
+  // Inverso de jumpToTimeInPlots: cambia a Traza y selecciona el primer mensaje (de CUALQUIER id,
+  // no solo el de la señal graficada) con t >= al instante clickeado en el gráfico — "el mensaje
+  // inmediatamente posterior" — usando lowerBound sobre state.trace, que ya está ordenado por tiempo.
+  // Si el click cayó después del último mensaje, cae al último (no hay ninguno posterior real).
+  function jumpToMessageInTrace(t) {
+    if (state.trace.length === 0) return;
+    const idx = Math.min(lowerBound(state.trace, t), state.trace.length - 1);
+    setTab("traza");
+    selectRow(idx, true);
   }
 
   function renderStats() {
@@ -3291,6 +3333,7 @@
       requestRedraw();
     });
     stack.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return; // el botón derecho abre el menú contextual (ver "contextmenu" más abajo), no debe iniciar pan ni contar como click de medición/marcador
       if (state.chart.tableView || !state.chart.range) return;
       if (e.target.closest("button, .chart-lane-trigger")) return; // dejar que el botón (✕ quitar) o los controles del trigger reciban su propia interacción, sin iniciar un arrastre
       stack.setPointerCapture(e.pointerId);
@@ -3310,6 +3353,15 @@
         state.chart.drag = null;
         stack.style.cursor = "";
       }
+    });
+    stack.addEventListener("contextmenu", (e) => {
+      if (state.chart.tableView || !state.chart.range) return;
+      if (e.target.closest("button, .chart-lane-trigger")) return;
+      const rect = chartRefRect();
+      if (!rect) return;
+      e.preventDefault();
+      const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
+      openChartContextMenu(e.clientX, e.clientY, { t: xToT(x, rect.width) });
     });
     stack.addEventListener("wheel", (e) => {
       if (state.chart.tableView || !state.chart.range) return;
