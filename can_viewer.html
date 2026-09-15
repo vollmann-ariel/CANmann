@@ -1267,15 +1267,17 @@
       tableView: false,
       drag: null,          // {startClientX, startRange}
       measure: { active: false, t1: null, t2: null }, // manual measurement; t1/t2 are absolute timestamps, same units as points[].t
-      jumpMarkerT: null,   // pinned marker set by "Jump to time in Plots" (Trace context menu); persists across
-                           // hover/pan and is only cleared by the next plain click on the chart area (wireChartInteraction)
+      jumpMarkerT: null,   // pinned marker: set by "Jump to time in Plots" (Trace context menu) or by a plain click
+                           // on the chart area; a plain click while one is already set clears it instead (toggle —
+                           // see wireChartInteraction). While set, it freezes the readout/lane values (updateReadout)
+                           // and suppresses the live hover cursor (drawLane) so they never disagree with each other.
     },
   };
 
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.0.0";
+  const APP_VERSION = "7.1.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2168,10 +2170,10 @@
   });
 
   // Cambia a la pestaña Plots, centra la ventana visible (sin tocar el zoom actual si el instante ya
-  // se veía — ver focusRangeOnTime) en t, y deja un marcador naranja fijo ahí, distinto del cursor de
-  // hover que ya existe: no se mueve con el mouse, solo lo borra el próximo click sobre el área del
-  // gráfico (ver wireChartInteraction). La vista de tabla no tiene forma de mostrar un instante puntual
-  // (no está acotada por rango de tiempo), así que se desactiva para que el marcador sea visible.
+  // se veía — ver focusRangeOnTime) en t, y deja un marcador naranja fijo ahí (mismo marcador que un
+  // click simple en el gráfico puede fijar/quitar — ver wireChartInteraction). La vista de tabla no
+  // tiene forma de mostrar un instante puntual (no está acotada por rango de tiempo), así que se
+  // desactiva para que el marcador sea visible.
   function jumpToTimeInPlots(t) {
     ensureFullRange();
     focusRangeOnTime(t);
@@ -2986,7 +2988,11 @@
       }
     }
 
-    if (state.chart.hoverT !== null && state.chart.hoverT >= t0 && state.chart.hoverT <= t1) {
+    // El cursor de hover se suprime mientras hay un marcador fijado (jumpMarkerT), para que nunca
+    // compita visualmente con él ni con los valores congelados de updateReadout (que en ese caso
+    // ignoran hoverT) — state.chart.hoverT se sigue actualizando igual en pointermove (lo necesita
+    // Measure para saber dónde colocar su punto), solo se deja de DIBUJAR acá.
+    if (state.chart.jumpMarkerT === null && state.chart.hoverT !== null && state.chart.hoverT >= t0 && state.chart.hoverT <= t1) {
       const hx = Math.round(xOf(state.chart.hoverT)) + 0.5;
       ctx.strokeStyle = inkFaint; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
       ctx.beginPath(); ctx.moveTo(hx, marginT); ctx.lineTo(hx, h - marginB); ctx.stroke();
@@ -3137,7 +3143,11 @@
       panel.innerHTML = '<div class="hint">Hover over a chart to see each signal\'s value at that instant.</div>';
       return;
     }
-    const t = state.chart.hoverT !== null ? state.chart.hoverT : (state.chart.range ? state.chart.range.t1 : state.t0);
+    // Con un marcador fijado, lval/rval quedan congelados en su tiempo — ignora hoverT por completo,
+    // así nunca compiten (ver también el mismo criterio en drawLane para el cursor de hover).
+    const t = state.chart.jumpMarkerT !== null ? state.chart.jumpMarkerT
+      : state.chart.hoverT !== null ? state.chart.hoverT
+      : (state.chart.range ? state.chart.range.t1 : state.t0);
     panel.innerHTML = "";
     const m = state.chart.measure;
     if (m.active) {
@@ -3159,7 +3169,8 @@
     }
     const tEl = document.createElement("div");
     tEl.className = "t";
-    tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + (state.chart.hoverT === null ? " · last visible value" : "");
+    const tSuffix = state.chart.jumpMarkerT !== null ? " · pinned" : state.chart.hoverT === null ? " · last visible value" : "";
+    tEl.textContent = "t = " + (t - state.t0).toFixed(4) + "s" + tSuffix;
     panel.appendChild(tEl);
     for (const key of state.chart.order) {
       const s = state.chart.series.get(key);
@@ -3309,9 +3320,16 @@
     });
     stack.addEventListener("pointerup", (e) => {
       if (state.chart.drag) {
-        if (state.chart.drag.mode === null) {
-          if (state.chart.measure.active && state.chart.hoverT !== null) placeMeasurePoint(state.chart.hoverT);
-          if (state.chart.jumpMarkerT !== null) { state.chart.jumpMarkerT = null; requestRedraw(); } // un click liso sobre el gráfico borra el marcador fijo de "Jump to time in Plots"
+        if (state.chart.drag.mode === null) { // un click liso (no un pan/drag) — ver la nota sobre e.button más arriba
+          if (state.chart.measure.active) {
+            if (state.chart.hoverT !== null) placeMeasurePoint(state.chart.hoverT);
+          } else if (state.chart.jumpMarkerT !== null) {
+            state.chart.jumpMarkerT = null; // ya había uno fijado -> este click lo quita (toggle)
+            requestRedraw();
+          } else if (state.chart.hoverT !== null) {
+            state.chart.jumpMarkerT = state.chart.hoverT; // no había marcador -> este click lo fija acá
+            requestRedraw();
+          }
         }
         try { stack.releasePointerCapture(e.pointerId); } catch (err) {}
         state.chart.drag = null;
