@@ -951,6 +951,11 @@
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="chartCtxCancel" role="menuitem">Cancel</button>
 </div>
 
+<div class="ctx-menu" id="chartTableCtxMenu" role="menu">
+  <button type="button" class="ctx-menu-item" id="chartTableCtxExport" role="menuitem">Export all tables as CSV</button>
+  <button type="button" class="ctx-menu-item ctx-menu-cancel" id="chartTableCtxCancel" role="menuitem">Cancel</button>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -1277,7 +1282,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.1.0";
+  const APP_VERSION = "7.2.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2168,6 +2173,85 @@
     if (chartCtxTarget) jumpToMessageInTrace(chartCtxTarget.t);
     closeChartContextMenu();
   });
+
+  /* ---------- Plots area (View as table): right-click "export as CSV" context menu ---------- */
+  function openChartTableContextMenu(x, y) {
+    const menu = el("chartTableCtxMenu");
+    menu.classList.add("open");
+    menu.style.left = "0px"; menu.style.top = "0px";
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 6) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 6) + "px";
+  }
+  function closeChartTableContextMenu() {
+    el("chartTableCtxMenu").classList.remove("open");
+  }
+  document.addEventListener("mousedown", (ev) => {
+    const menu = el("chartTableCtxMenu");
+    if (menu.classList.contains("open") && !menu.contains(ev.target)) closeChartTableContextMenu();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeChartTableContextMenu(); });
+  el("chartTableCtxCancel").addEventListener("click", closeChartTableContextMenu);
+  el("chartTableCtxExport").addEventListener("click", () => {
+    exportAllChartTablesAsCsv();
+    closeChartTableContextMenu();
+  });
+
+  function csvField(v) {
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  // Un solo CSV para todas las señales graficadas: primera columna = unión ordenada de TODOS los
+  // timestamps de TODAS las señales (todo el trace, sin recortar por el zoom/pan actual), luego una
+  // columna por señal con su valor SOLO en las filas donde esa señal tuvo un mensaje propio — el
+  // resto queda vacío (no se rellena/interpola). Encabezados = nombre de cada señal.
+  function exportAllChartTablesAsCsv() {
+    const series = state.chart.order.map((key) => state.chart.series.get(key));
+    if (series.length === 0) return;
+    const allTimes = new Set();
+    for (const s of series) for (const p of s.points) allTimes.add(p.t);
+    const times = [...allTimes].sort((a, b) => a - b);
+    const byTime = series.map((s) => {
+      const m = new Map();
+      for (const p of s.points) m.set(p.t, p);
+      return m;
+    });
+    const lines = [["Timestamp", ...series.map((s) => s.signalName)].map(csvField).join(",")];
+    for (const t of times) {
+      const row = [(t - state.t0).toFixed(4)];
+      for (const m of byTime) {
+        const p = m.get(t);
+        row.push(p ? csvField(p.label !== null ? p.label : formatNumFull(p.value)) : "");
+      }
+      lines.push(row.join(","));
+    }
+    downloadTextFile("﻿" + lines.join("\r\n"), "canmann_plots.csv", "text/csv");
+  }
+
+  // Mismo patrón que saveModel() en DBC Edit: showSaveFilePicker cuando está disponible, si no
+  // un <a download> con Blob — reutilizable para cualquier exportación de texto futura.
+  async function downloadTextFile(text, suggestedName, mimeType) {
+    if (window.showSaveFilePicker) {
+      try {
+        const ext = "." + suggestedName.split(".").pop();
+        const handle = await window.showSaveFilePicker({
+          suggestedName, types: [{ description: ext.slice(1).toUpperCase(), accept: { [mimeType]: [ext] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    const blob = new Blob([text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = suggestedName; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Cambia a la pestaña Plots, centra la ventana visible (sin tocar el zoom actual si el instante ya
   // se veía — ver focusRangeOnTime) en t, y deja un marcador naranja fijo ahí (mismo marcador que un
@@ -3337,8 +3421,13 @@
       }
     });
     stack.addEventListener("contextmenu", (e) => {
-      if (state.chart.tableView || !state.chart.range) return;
+      if (!state.chart.range || state.chart.order.length === 0) return;
       if (e.target.closest("button, .chart-lane-trigger")) return;
+      if (state.chart.tableView) {
+        e.preventDefault();
+        openChartTableContextMenu(e.clientX, e.clientY);
+        return;
+      }
       const rect = chartRefRect();
       if (!rect) return;
       e.preventDefault();
