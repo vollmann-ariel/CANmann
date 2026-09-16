@@ -1282,7 +1282,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.3.0";
+  const APP_VERSION = "7.4.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1683,7 +1683,10 @@
       if (!e) {
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
-        e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name: def ? def.name : null, sender: def ? def.sender : null, msg: def };
+        // Sin definición propia en la DBC pero reconocible como frame TP.CM/TP.DT: nombre genérico
+        // en vez de null, para que cuente como "decodificado" igual que un TPCM_*/TPDT_* declarado.
+        const name = def ? def.name : j1939TpKind(r.id);
+        e = { key, channel: r.channel, id: r.id, count: 0, lastRow: i, name, sender: def ? def.sender : null, msg: def };
         idx.set(key, e);
       }
       e.count++;
@@ -1839,6 +1842,16 @@
       }
     }
     state.tpReassembly = tp;
+  }
+
+  // "TP.CM" / "TP.DT" si el id crudo es un frame genérico de J1939 Transport Protocol (PF fijo por
+  // estándar, 0xEC/0xEB — ver la explicación completa dada al usuario), null si no. Se usa para
+  // tratar estos frames como "reconocidos" (cuentan como decodificados) aunque la DBC asignada no
+  // declare un mensaje en ese id crudo — antes cualquier TP.CM/TP.DT sin declarar mostraba "not
+  // defined" pese a ser tráfico de protocolo entendido, no basura real.
+  function j1939TpKind(id) {
+    const pf = (id >> 16) & 0xff;
+    return pf === 0xec ? "TP.CM" : pf === 0xeb ? "TP.DT" : null;
   }
 
   // Resuelve qué mensaje del DBC corresponde a un PGN+dirección-origen dado, ignorando los bits de
@@ -2431,15 +2444,17 @@
         const r = state.trace[i];
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
-        const tpEntry = state.tpReassembly.get(i); // fila que completó una sesión J1939 TP: cuenta como decodificada
-        const decoded = def || (tpEntry ? tpEntry.msg : null);
+        const tpEntry = state.tpReassembly.get(i); // fila que completó una sesión J1939 TP
+        const resolvedName = def ? def.name : tpEntry ? tpEntry.msg.name : j1939TpKind(r.id);
+        const resolvedSignals = def ? def.signals : tpEntry ? tpEntry.msg.signals : [];
+        const decoded = !!resolvedName; // incluye TP.CM/TP.DT genéricos sin definición propia — ver j1939TpKind
         if (onlyDecoded && !decoded) continue;
         if (onlyUndecoded && decoded) continue;
         if (matcher) {
           const hexId = "0x" + r.id.toString(16);
           let hit = matcher.test(hexId) || matcher.test(String(r.id)) || matcher.test(String(r.channel));
           if (!hit && decoded) {
-            hit = matcher.test(decoded.name) || decoded.signals.some((s) => matcher.test(s.name));
+            hit = matcher.test(resolvedName) || resolvedSignals.some((s) => matcher.test(s.name));
           }
           if (!hit) continue;
         }
@@ -2519,17 +2534,17 @@
       const dbc = findDbcForChannelId(r.channel, r.id);
       const def = dbc ? dbc.messages.get(r.id) : null;
       const tpEntry = state.tpReassembly.get(rowIdx); // fila que completó una sesión J1939 TP (ver renderSignalPanelFor)
-      const decoded = def || (tpEntry ? tpEntry.msg : null);
+      const name = def ? def.name : tpEntry ? tpEntry.msg.name : j1939TpKind(r.id);
       d.querySelector(".c-time").textContent = fmtTime(r.t);
       d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
       d.querySelector(".c-dir").textContent = r.dir;
       d.querySelector(".c-id").textContent = "0x" + r.id.toString(16).toUpperCase().padStart(r.ext ? 8 : 3, "0");
       const nameEl = d.querySelector(".c-name");
-      nameEl.textContent = decoded ? decoded.name : "—";
-      nameEl.className = "c-name" + (decoded ? "" : " unknown");
+      nameEl.textContent = name || "—";
+      nameEl.className = "c-name" + (name ? "" : " unknown");
       d.querySelector(".c-dlc").textContent = r.dlc;
       const dataEl = d.querySelector(".c-data");
-      if (!decoded) {
+      if (!name) {
         const prevIdx = state.prevSameIdRow[rowIdx];
         dataEl.innerHTML = fmtDataWithDiff(r.data, prevIdx === -1 ? null : state.trace[prevIdx].data);
       } else {
@@ -2594,7 +2609,30 @@
       const reassembled = !!data && data !== r.data; // effectiveFrameData gave back a distinct buffer, not this row's own bytes
       const decoded = data ? decodeMessage(dbc, r.id, data) : null;
 
-      if (!dbc) {
+      const tpKind = !dbc ? j1939TpKind(r.id) : null;
+      if (tpKind) {
+        // Frame TP.CM/TP.DT genérico sin definición propia en la DBC asignada — no es basura sin
+        // reconocer, es tráfico de protocolo entendido (ver explicación de PF fijo dada al usuario).
+        const sa = r.id & 0xff, ps = (r.id >> 8) & 0xff;
+        let detail;
+        if (tpKind === "TP.DT") {
+          detail = `Sequence #${r.data.length ? r.data[0] : "?"} of an in-progress multi-frame transfer (${ps === 0xff ? "broadcast/BAM" : "point-to-point"}, source 0x${sa.toString(16).toUpperCase().padStart(2, "0")}) — select the frame that completes it to see the decoded message.`;
+        } else {
+          const ctrl = r.data.length ? r.data[0] : null;
+          const ctrlNames = { 0x10: "RTS (Request To Send)", 0x11: "CTS (Clear To Send)", 0x13: "End of Message Acknowledgement", 0x20: "BAM (Broadcast Announce Message)", 0xff: "Connection Abort" };
+          const ctrlName = ctrl === null ? "control frame" : ctrlNames[ctrl] || ("control byte 0x" + ctrl.toString(16).toUpperCase());
+          if ((ctrl === 0x20 || ctrl === 0x10) && r.data.length >= 8) {
+            const totalSize = r.data[1] | (r.data[2] << 8);
+            const pgn = r.data[5] | (r.data[6] << 8) | (r.data[7] << 16);
+            detail = `${ctrlName} — announces a ${totalSize}-byte transfer of PGN ${pgn} (0x${pgn.toString(16).toUpperCase()}) from source 0x${sa.toString(16).toUpperCase().padStart(2, "0")}.`;
+          } else {
+            detail = `${ctrlName}, source 0x${sa.toString(16).toUpperCase().padStart(2, "0")}.`;
+          }
+        }
+        html += `<div class="sig-header"><div class="msgname">${tpKind}</div>
+          <div class="msgmeta"><span>${hexId}</span><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
+          <div class="comment">J1939 Transport Protocol ${tpKind === "TP.CM" ? "control" : "data"} frame — ${detail}</div></div>`;
+      } else if (!dbc) {
         html += `<div class="sig-header"><div class="msgname unknown">${hexId} — not defined</div>
           <div class="msgmeta"><span>Ch ${r.channel}</span><span>t = ${fmtTime(r.t)}s</span><span>DLC ${r.dlc}</span></div>
           <div class="comment">This ID isn't recognized by any of the loaded DBC files.</div></div>`;
