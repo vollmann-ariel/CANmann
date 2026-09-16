@@ -1282,7 +1282,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.2.0";
+  const APP_VERSION = "7.3.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1663,10 +1663,10 @@
 
   /* ---------- message index / stats ---------- */
   function recomputeAll() {
-    buildMessageIndex();
-    buildPrevSameIdIndex();
     buildFastPacketReassembly();
-    buildTpReassembly();
+    buildTpReassembly(); // antes de buildMessageIndex(): esta última agrega entradas virtuales para los mensajes reensamblados
+    buildPrevSameIdIndex();
+    buildMessageIndex();
     renderStats();
     renderMessageList();
     applyFilter();
@@ -1688,6 +1688,21 @@
       }
       e.count++;
       e.lastRow = i;
+    }
+    // Entradas virtuales para mensajes reensamblados por J1939 TP (RC_0F, EC1_00, ...): su id
+    // declarado nunca aparece tal cual en el trace crudo (solo TP.CM/TP.DT genéricos), así que no
+    // pueden salir del loop de arriba. Se cuentan aparte, una vez por sesión COMPLETADA (no una vez
+    // por frame TP.DT crudo) — las entradas de los propios TPCM_*/TPDT_* de arriba quedan intactas.
+    for (const [rowIdx, tpEntry] of state.tpReassembly) {
+      const r = state.trace[rowIdx];
+      const key = r.channel + ":" + tpEntry.msg.id;
+      let e = idx.get(key);
+      if (!e) {
+        e = { key, channel: r.channel, id: tpEntry.msg.id, count: 0, lastRow: rowIdx, name: tpEntry.msg.name, sender: tpEntry.msg.sender, msg: tpEntry.msg };
+        idx.set(key, e);
+      }
+      e.count++;
+      e.lastRow = rowIdx;
     }
     state.msgIndex = idx;
   }
@@ -1860,6 +1875,23 @@
         let e = stats.get(key);
         if (!e) {
           e = { channel: r.channel, id: r.id, signalName: sig.name, msgName: decoded.message.name, sender: decoded.message.sender, unit: sig.unit, transitions: 0, count: 0, lastRaw: null };
+          stats.set(key, e);
+        }
+        e.count++;
+        if (e.lastRaw !== null && sig.raw !== e.lastRaw) e.transitions++;
+        e.lastRaw = sig.raw;
+      }
+    }
+    // mismo criterio que buildMessageIndex: los mensajes J1939 TP reensamblados se cuentan aparte,
+    // una vez por sesión completada, ya que su id nunca aparece en una fila cruda del trace.
+    for (const [rowIdx, tpEntry] of state.tpReassembly) {
+      const r = state.trace[rowIdx];
+      const decoded = decodeMessage(tpEntry.dbc, tpEntry.msg.id, tpEntry.data);
+      for (const sig of decoded.signals) {
+        const key = r.channel + ":" + tpEntry.msg.id + ":" + sig.name;
+        let e = stats.get(key);
+        if (!e) {
+          e = { channel: r.channel, id: tpEntry.msg.id, signalName: sig.name, msgName: decoded.message.name, sender: decoded.message.sender, unit: sig.unit, transitions: 0, count: 0, lastRaw: null };
           stats.set(key, e);
         }
         e.count++;
@@ -2399,13 +2431,15 @@
         const r = state.trace[i];
         const dbc = findDbcForChannelId(r.channel, r.id);
         const def = dbc ? dbc.messages.get(r.id) : null;
-        if (onlyDecoded && !def) continue;
-        if (onlyUndecoded && def) continue;
+        const tpEntry = state.tpReassembly.get(i); // fila que completó una sesión J1939 TP: cuenta como decodificada
+        const decoded = def || (tpEntry ? tpEntry.msg : null);
+        if (onlyDecoded && !decoded) continue;
+        if (onlyUndecoded && decoded) continue;
         if (matcher) {
           const hexId = "0x" + r.id.toString(16);
           let hit = matcher.test(hexId) || matcher.test(String(r.id)) || matcher.test(String(r.channel));
-          if (!hit && def) {
-            hit = matcher.test(def.name) || def.signals.some((s) => matcher.test(s.name));
+          if (!hit && decoded) {
+            hit = matcher.test(decoded.name) || decoded.signals.some((s) => matcher.test(s.name));
           }
           if (!hit) continue;
         }
@@ -2484,16 +2518,18 @@
       d.style.height = ROW_H + "px";
       const dbc = findDbcForChannelId(r.channel, r.id);
       const def = dbc ? dbc.messages.get(r.id) : null;
+      const tpEntry = state.tpReassembly.get(rowIdx); // fila que completó una sesión J1939 TP (ver renderSignalPanelFor)
+      const decoded = def || (tpEntry ? tpEntry.msg : null);
       d.querySelector(".c-time").textContent = fmtTime(r.t);
       d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
       d.querySelector(".c-dir").textContent = r.dir;
       d.querySelector(".c-id").textContent = "0x" + r.id.toString(16).toUpperCase().padStart(r.ext ? 8 : 3, "0");
       const nameEl = d.querySelector(".c-name");
-      nameEl.textContent = def ? def.name : "—";
-      nameEl.className = "c-name" + (def ? "" : " unknown");
+      nameEl.textContent = decoded ? decoded.name : "—";
+      nameEl.className = "c-name" + (decoded ? "" : " unknown");
       d.querySelector(".c-dlc").textContent = r.dlc;
       const dataEl = d.querySelector(".c-data");
-      if (!def) {
+      if (!decoded) {
         const prevIdx = state.prevSameIdRow[rowIdx];
         dataEl.innerHTML = fmtDataWithDiff(r.data, prevIdx === -1 ? null : state.trace[prevIdx].data);
       } else {
@@ -2665,6 +2701,18 @@
       if (!sig) continue; // rama de mux inactiva o señal fuera de rango en este frame — hueco en la serie
       points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
     }
+    // Un mensaje J1939 TP reensamblado (RC_0F, EC1_00, ...) nunca coincide con el loop de arriba —
+    // su id declarado no existe tal cual en ninguna fila del trace crudo — así que sus puntos salen
+    // de state.tpReassembly en cambio, uno por sesión completada.
+    for (const [rowIdx, tpEntry] of state.tpReassembly) {
+      const r = state.trace[rowIdx];
+      if (r.channel !== channel || tpEntry.msg.id !== id) continue;
+      const decoded = decodeMessage(tpEntry.dbc, tpEntry.msg.id, tpEntry.data);
+      const sig = decoded.signals.find((s) => s.name === signalName);
+      if (!sig) continue;
+      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
+    }
+    if (points.length > 1) points.sort((a, b) => a.t - b.t); // por si ambas fuentes se combinaron fuera de orden
     return {
       channel, id, signalName, msgName: msg ? msg.name : "0x" + id.toString(16), sender: msg ? msg.sender : "",
       unit: sigDef ? sigDef.unit : "", comment: sigDef ? sigDef.comment : null, points, el: null,
