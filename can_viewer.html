@@ -943,6 +943,8 @@
 <div class="ctx-menu" id="traceCtxMenu" role="menu">
   <button type="button" class="ctx-menu-item" id="traceCtxFilterMsg" role="menuitem">Filter by message id</button>
   <button type="button" class="ctx-menu-item" id="traceCtxJumpPlot" role="menuitem">Jump to time in Plots</button>
+  <button type="button" class="ctx-menu-item" id="traceCtxCopyId" role="menuitem">Copy message id</button>
+  <button type="button" class="ctx-menu-item" id="traceCtxCopyName" role="menuitem">Copy message name</button>
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="traceCtxCancel" role="menuitem">Cancel</button>
 </div>
 
@@ -1282,7 +1284,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.4.0";
+  const APP_VERSION = "7.5.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1854,6 +1856,19 @@
     return pf === 0xec ? "TP.CM" : pf === 0xeb ? "TP.DT" : null;
   }
 
+  // Resuelve el "mensaje efectivo" de una fila para mostrar/filtrar/copiar: la definición normal
+  // de la DBC, el mensaje J1939 TP reensamblado si esta fila completó una sesión, o el nombre
+  // genérico TP.CM/TP.DT si no hay ninguna definición propia — name queda null si de verdad no se
+  // reconoce nada. signals es [] cuando no hay una definición real de la que buscar señales.
+  function resolveRowMessage(rowIdx) {
+    const r = state.trace[rowIdx];
+    const dbc = findDbcForChannelId(r.channel, r.id);
+    const def = dbc ? dbc.messages.get(r.id) : null;
+    const tpEntry = state.tpReassembly.get(rowIdx);
+    const msg = def || (tpEntry ? tpEntry.msg : null);
+    return { name: msg ? msg.name : j1939TpKind(r.id), signals: msg ? msg.signals : [] };
+  }
+
   // Resuelve qué mensaje del DBC corresponde a un PGN+dirección-origen dado, ignorando los bits de
   // prioridad del ID (necesario: en datos reales el frame TP.CM anunciante puede usar una prioridad
   // distinta a la que el DBC declaró para el mensaje de aplicación). Índice cacheado en el propio
@@ -2163,10 +2178,11 @@
     });
   });
 
-  /* ---------- Trace table: right-click "filter / jump to plot" context menu ---------- */
-  let traceCtxTarget = null; // { id, t } — the row's raw CAN id and absolute timestamp
+  /* ---------- Trace table: right-click "filter / jump to plot / copy" context menu ---------- */
+  let traceCtxTarget = null; // { id, ext, t, name } — name is null for a genuinely unrecognized id
   function openTraceContextMenu(x, y, target) {
     traceCtxTarget = target;
+    el("traceCtxCopyName").style.display = target.name ? "" : "none";
     const menu = el("traceCtxMenu");
     menu.classList.add("open");
     menu.style.left = "0px"; menu.style.top = "0px"; // measure natural size before clamping to viewport
@@ -2190,6 +2206,14 @@
   });
   el("traceCtxJumpPlot").addEventListener("click", () => {
     if (traceCtxTarget) jumpToTimeInPlots(traceCtxTarget.t);
+    closeTraceContextMenu();
+  });
+  el("traceCtxCopyId").addEventListener("click", () => {
+    if (traceCtxTarget) copyToClipboard("0x" + traceCtxTarget.id.toString(16).toUpperCase().padStart(traceCtxTarget.ext ? 8 : 3, "0"));
+    closeTraceContextMenu();
+  });
+  el("traceCtxCopyName").addEventListener("click", () => {
+    if (traceCtxTarget && traceCtxTarget.name) copyToClipboard(traceCtxTarget.name);
     closeTraceContextMenu();
   });
 
@@ -2442,19 +2466,15 @@
       const out = [];
       for (let i = 0; i < state.trace.length; i++) {
         const r = state.trace[i];
-        const dbc = findDbcForChannelId(r.channel, r.id);
-        const def = dbc ? dbc.messages.get(r.id) : null;
-        const tpEntry = state.tpReassembly.get(i); // fila que completó una sesión J1939 TP
-        const resolvedName = def ? def.name : tpEntry ? tpEntry.msg.name : j1939TpKind(r.id);
-        const resolvedSignals = def ? def.signals : tpEntry ? tpEntry.msg.signals : [];
-        const decoded = !!resolvedName; // incluye TP.CM/TP.DT genéricos sin definición propia — ver j1939TpKind
+        const { name, signals } = resolveRowMessage(i);
+        const decoded = !!name; // incluye TP.CM/TP.DT genéricos sin definición propia — ver j1939TpKind
         if (onlyDecoded && !decoded) continue;
         if (onlyUndecoded && decoded) continue;
         if (matcher) {
           const hexId = "0x" + r.id.toString(16);
           let hit = matcher.test(hexId) || matcher.test(String(r.id)) || matcher.test(String(r.channel));
           if (!hit && decoded) {
-            hit = matcher.test(resolvedName) || resolvedSignals.some((s) => matcher.test(s.name));
+            hit = matcher.test(name) || signals.some((s) => matcher.test(s.name));
           }
           if (!hit) continue;
         }
@@ -2531,10 +2551,7 @@
       const r = state.trace[rowIdx];
       const d = rowPool[p - first];
       d.style.height = ROW_H + "px";
-      const dbc = findDbcForChannelId(r.channel, r.id);
-      const def = dbc ? dbc.messages.get(r.id) : null;
-      const tpEntry = state.tpReassembly.get(rowIdx); // fila que completó una sesión J1939 TP (ver renderSignalPanelFor)
-      const name = def ? def.name : tpEntry ? tpEntry.msg.name : j1939TpKind(r.id);
+      const { name } = resolveRowMessage(rowIdx);
       d.querySelector(".c-time").textContent = fmtTime(r.t);
       d.querySelector(".c-chan").innerHTML = `<span class="chan-tag">${r.channel}</span>`;
       d.querySelector(".c-dir").textContent = r.dir;
@@ -2552,7 +2569,7 @@
       }
       d.className = "trace-row" + (rowIdx === state.selectedRow ? " selected" : "");
       d.onclick = () => selectRow(rowIdx, false);
-      d.oncontextmenu = (ev) => { ev.preventDefault(); openTraceContextMenu(ev.clientX, ev.clientY, { id: r.id, t: r.t }); };
+      d.oncontextmenu = (ev) => { ev.preventDefault(); openTraceContextMenu(ev.clientX, ev.clientY, { id: r.id, ext: r.ext, t: r.t, name }); };
       rowsEl.appendChild(d);
     }
   }
