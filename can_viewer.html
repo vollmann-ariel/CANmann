@@ -28,6 +28,8 @@
     --series-7: #4a3aa7;
     --series-8: #e34948;
     --shadow: 0 1px 2px rgba(20, 22, 20, 0.06), 0 4px 16px rgba(20, 22, 20, 0.05);
+    --glass-bg: rgba(255, 255, 255, 0.45);
+    --glass-border: rgba(211, 215, 215, 0.65);
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -58,6 +60,8 @@
       --series-7: #9085e9;
       --series-8: #e66767;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+      --glass-bg: rgba(27, 32, 39, 0.42);
+      --glass-border: rgba(255, 255, 255, 0.14);
       color-scheme: dark;
     }
   }
@@ -69,7 +73,9 @@
     --critical-soft: rgba(217,115,105,.14);
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    --glass-bg: rgba(27, 32, 39, 0.42); --glass-border: rgba(255, 255, 255, 0.14);
+    color-scheme: dark;
   }
   :root[data-theme="light"] {
     --bg: #eef0f0; --surface: #ffffff; --surface-2: #e4e7e7; --surface-3: #d7dbdb; --border: #d3d7d7;
@@ -79,7 +85,9 @@
     --critical-soft: rgba(184,68,60,.12);
     --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
     --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
-    --shadow: 0 1px 2px rgba(20,22,20,.06), 0 4px 16px rgba(20,22,20,.05); color-scheme: light;
+    --shadow: 0 1px 2px rgba(20,22,20,.06), 0 4px 16px rgba(20,22,20,.05);
+    --glass-bg: rgba(255, 255, 255, 0.45); --glass-border: rgba(211, 215, 215, 0.65);
+    color-scheme: light;
   }
 
   * { box-sizing: border-box; }
@@ -173,12 +181,64 @@
   .theme-note { display: none; }
 
   /* ---------- Layout ---------- */
-  .workspace { flex: 1 1 auto; display: flex; min-height: 0; }
-  .rail { flex: 0 0 auto; background: var(--surface); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-  .rail-left { width: 300px; border-right: 1px solid var(--border); }
-  .rail-right { width: 340px; border-left: 1px solid var(--border); }
-  .rail-left.collapsed, .rail-right.collapsed, .toolbar.collapsed, .chart-toolbar.collapsed { display: none; }
+  /* overflow:hidden clips the rails' translateX slide when collapsed — without it, a rail pushed
+     past the right edge (rail-right slides +100%) grows the page's scrollable width and shows a
+     spurious horizontal scrollbar (rail-left sliding -100% doesn't hit this, since browsers don't
+     scroll to reveal content pushed before the left edge in a LTR document). */
+  .workspace { flex: 1 1 auto; display: flex; min-height: 0; position: relative; overflow: hidden; }
+  /* Rails float as glass overlays on top of the center pane instead of sharing the flex row with it,
+     so the trace/chart pane always renders at 100% of the workspace width regardless of collapsed
+     state — see .rail-handle below for the always-visible edge-docked toggle. */
+  .rail {
+    position: absolute; top: 0; bottom: 0; z-index: 15;
+    background: var(--glass-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    transition: transform .25s cubic-bezier(.16,1,.3,1), opacity .25s cubic-bezier(.16,1,.3,1);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .rail { background: var(--surface); }
+  }
+  .rail-left { left: 0; width: 300px; border-right: 1px solid var(--glass-border); }
+  .rail-right { right: 0; width: 340px; border-left: 1px solid var(--glass-border); }
+  .rail-left.collapsed { transform: translateX(-100%); opacity: 0; pointer-events: none; }
+  .rail-right.collapsed { transform: translateX(100%); opacity: 0; pointer-events: none; }
+  .toolbar.collapsed, .chart-toolbar.collapsed { display: none; }
   .trace-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  /* The toolbar row and (Trace tab only) the message table shouldn't sit under the glass rails at
+     all — they inset into exactly the gap between whichever rails are currently expanded, defaulting
+     to both rails' widths (their default state) and dropping an inset to 0 once the matching rail
+     carries .collapsed. Kept in sync with the rails' own .25s slide via matching duration/easing.
+     The Plots chart canvas deliberately keeps the opposite behavior (always full width, blurred
+     under the rails) — only Trace's data grid needs every column always fully visible/unclipped. */
+  .toolbar, .chart-toolbar, .trace-table { margin-left: 300px; margin-right: 340px; transition: margin-left .25s cubic-bezier(.16,1,.3,1), margin-right .25s cubic-bezier(.16,1,.3,1); }
+  #workspace:has(.rail-left.collapsed) .toolbar, #workspace:has(.rail-left.collapsed) .chart-toolbar, #workspace:has(.rail-left.collapsed) .trace-table { margin-left: 0; }
+  #workspace:has(.rail-right.collapsed) .toolbar, #workspace:has(.rail-right.collapsed) .chart-toolbar, #workspace:has(.rail-right.collapsed) .trace-table { margin-right: 0; }
+
+  /* ---------- Rail expand/collapse handle ---------- */
+  .rail-handle {
+    position: absolute; top: 50%; z-index: 16;
+    width: 22px; height: 56px; display: flex; align-items: center; justify-content: center;
+    background: var(--glass-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--glass-border); box-shadow: var(--shadow); color: var(--ink-dim);
+    cursor: pointer; padding: 0;
+    transition: transform .25s cubic-bezier(.16,1,.3,1);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .rail-handle { background: var(--surface); }
+  }
+  .rail-handle:hover { color: var(--accent); }
+  .rail-handle .chev-h { transition: transform .2s; }
+  /* default (no .collapsed) = expanded: flush against the rail's outer edge, the rail's own width away
+     from this handle's edge-docked resting position. .collapsed = flush against the screen edge. */
+  .rail-handle-left { left: 0; border-left: none; border-radius: 0 10px 10px 0; transform: translateY(-50%) translateX(300px); }
+  .rail-handle-left.collapsed { transform: translateY(-50%) translateX(0); }
+  .rail-handle-right { right: 0; border-right: none; border-radius: 10px 0 0 10px; transform: translateY(-50%) translateX(-340px); }
+  .rail-handle-right.collapsed { transform: translateY(-50%) translateX(0); }
+  /* base glyph points left; collapsed = point toward screen center, expanded = point outward */
+  .rail-handle-left.collapsed .chev-h { transform: rotate(180deg); }
+  .rail-handle-right .chev-h { transform: rotate(180deg); }
+  .rail-handle-right.collapsed .chev-h { transform: rotate(0deg); }
 
   section.block { border-bottom: 1px solid var(--border); padding: 12px 14px; }
   .block h2 {
@@ -466,9 +526,17 @@
   .chart-readout { padding: 14px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .chart-readout .hint { color: var(--ink-faint); font-size: 12px; }
   .chart-readout .t { font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; }
-  .chart-readout-measure { font-size: 11px; color: var(--cyan); margin-bottom: 10px; padding: 6px 8px; border: 1px solid var(--cyan); border-radius: 6px; }
-  .chart-readout-measure .mline { font-weight: 700; font-size: 12.5px; }
-  .chart-readout-measure .mmeta { font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums; font-family: "Cascadia Code", Consolas, monospace; margin-top: 2px; }
+  /* Lives in .chart-toolbar next to #chartMeasureBtn, not in the rail anymore — collapsed to
+     nothing (incl. the toolbar's own 10px gap, cancelled via the negative margin) until measuring
+     is active, then grows open with a short width/opacity transition. */
+  .chart-measure-readout {
+    height: 30px; display: flex; align-items: center;
+    font-size: 11px; color: var(--cyan); font-variant-numeric: tabular-nums; white-space: nowrap;
+    border: 0 solid var(--cyan); border-radius: 6px;
+    max-width: 0; margin-left: -10px; padding: 0; opacity: 0; overflow: hidden;
+    transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease, padding .25s ease, border-width .25s ease;
+  }
+  .chart-measure-readout.open { max-width: 260px; margin-left: 0; padding: 0 10px; border-width: 1px; opacity: 1; }
   .chart-readout-row { display: flex; flex-direction: column; gap: 3px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
   .chart-readout-row .top { display: flex; align-items: baseline; gap: 8px; }
   .chart-readout-row .swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
@@ -734,6 +802,12 @@
   </div>
 
   <div class="workspace" id="workspace">
+    <button type="button" class="rail-handle rail-handle-left" id="railHandleLeft" title="Expandir/colapsar panel izquierdo" aria-label="Expandir/colapsar panel izquierdo">
+      <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <button type="button" class="rail-handle rail-handle-right hide-in-dbcedit" id="railHandleRight" title="Expandir/colapsar panel derecho" aria-label="Expandir/colapsar panel derecho">
+      <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
     <aside class="rail rail-left">
     <div id="defaultRailBlocksWrap" style="display:contents">
       <section class="block collapsed" data-block="dbc">
@@ -877,6 +951,7 @@
         <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time between two points">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="measureIcon"><path d="M4 12h16M4 8v8M20 8v8"/></svg>
         </button>
+        <div class="chart-measure-readout" id="chartMeasureReadout"></div>
         <label class="toggle"><input type="checkbox" id="chartTableToggle" /> View as table</label>
       </div>
       <div class="chart-scroll" id="chartScroll">
@@ -1284,7 +1359,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.5.0";
+  const APP_VERSION = "7.6.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -3323,8 +3398,37 @@
     row.addEventListener("pointercancel", finish);
   }
 
+  // Lives in .chart-toolbar next to #chartMeasureBtn (see updateReadout, which calls this on every
+  // hover/click/toggle that already refreshes the rest of the readout — one trigger point covers
+  // both). Shows a prompt before point 1 is set, a live ticking Δt against the current hover while
+  // only point 1 is set, and the frozen Δt once point 2 is placed.
+  function updateMeasureReadout() {
+    const box = el("chartMeasureReadout");
+    const m = state.chart.measure;
+    box.classList.toggle("open", m.active);
+    if (!m.active) { box.textContent = ""; box.title = ""; return; }
+    if (m.t1 !== null && m.t2 !== null) {
+      const ta = Math.min(m.t1, m.t2), tb = Math.max(m.t1, m.t2);
+      box.textContent = "Δt = " + (tb - ta).toFixed(4) + "s";
+      box.title = "t1 = " + (ta - state.t0).toFixed(4) + "s · t2 = " + (tb - state.t0).toFixed(4) + "s";
+    } else if (m.t1 !== null) {
+      if (state.chart.hoverT !== null) {
+        const ta = Math.min(m.t1, state.chart.hoverT), tb = Math.max(m.t1, state.chart.hoverT);
+        box.textContent = "Δt = " + (tb - ta).toFixed(4) + "s…";
+        box.title = "Point 1 at t = " + (m.t1 - state.t0).toFixed(4) + "s — click a chart to set point 2";
+      } else {
+        box.textContent = "Point 1 set — hover a chart to measure";
+        box.title = "";
+      }
+    } else {
+      box.textContent = "Click a chart to place point 1";
+      box.title = "";
+    }
+  }
+
   function updateReadout() {
     if (rowDrag) return; // no reconstruir las filas mientras se arrastra una: perdería el pointer capture
+    updateMeasureReadout();
     const panel = el("chartReadout");
     if (state.chart.order.length === 0) {
       panel.innerHTML = '<div class="hint">Hover over a chart to see each signal\'s value at that instant.</div>';
@@ -3336,24 +3440,6 @@
       : state.chart.hoverT !== null ? state.chart.hoverT
       : (state.chart.range ? state.chart.range.t1 : state.t0);
     panel.innerHTML = "";
-    const m = state.chart.measure;
-    if (m.active) {
-      const box = document.createElement("div");
-      box.className = "chart-readout-measure";
-      if (m.t1 !== null && m.t2 !== null) {
-        const ta = Math.min(m.t1, m.t2), tb = Math.max(m.t1, m.t2);
-        const line = document.createElement("div"); line.className = "mline";
-        line.textContent = "Δt = " + (tb - ta).toFixed(4) + "s";
-        const meta = document.createElement("div"); meta.className = "mmeta";
-        meta.textContent = "t1 = " + (ta - state.t0).toFixed(4) + "s · t2 = " + (tb - state.t0).toFixed(4) + "s";
-        box.appendChild(line); box.appendChild(meta);
-      } else if (m.t1 !== null) {
-        box.textContent = "Point 1 set at t = " + (m.t1 - state.t0).toFixed(4) + "s — click a chart to place point 2";
-      } else {
-        box.textContent = "Measuring: click a chart to place point 1";
-      }
-      panel.appendChild(box);
-    }
     const tEl = document.createElement("div");
     tEl.className = "t";
     const tSuffix = state.chart.jumpMarkerT !== null ? " · pinned" : state.chart.hoverT === null ? " · last visible value" : "";
@@ -3552,25 +3638,18 @@
   }
 
   /* ---- buscador para agregar señales ---- */
-  function chartCandidates() {
-    const out = [];
-    for (const e of state.msgIndex.values()) {
-      if (!e.name) continue;
-      const dbc = findDbcForChannelId(e.channel, e.id);
-      const msg = dbc && dbc.messages.get(e.id);
-      if (!msg) continue;
-      for (const sig of msg.signals) out.push({ channel: e.channel, id: e.id, signalName: sig.name, msgName: msg.name, sender: msg.sender, unit: sig.unit, count: e.count });
-    }
-    return out;
-  }
-
   function renderChartAddResults() {
     const input = el("chartAddInput"), box = el("chartAddResults");
     const q = input.value.trim();
     if (!q) { box.classList.remove("open"); box.innerHTML = ""; return; }
+    // Reuses Most Active's own stats (state.varStats/computeSignalVariations) so the add-signal
+    // search ranks and counts identically to #varSearch, instead of keeping a second, inconsistent
+    // notion of "activity" around — computed lazily here too, same as ensureVarStatsAndRender().
+    if (!state.varStats) state.varStats = computeSignalVariations();
     const matcher = globToRegex(q);
-    const matches = chartCandidates()
+    const matches = [...state.varStats.values()]
       .filter((c) => matcher.test(c.signalName) || matcher.test(c.msgName))
+      .sort((a, b) => b.transitions - a.transitions)
       .slice(0, 40);
     box.innerHTML = "";
     if (matches.length === 0) {
@@ -3593,7 +3672,7 @@
           const src = document.createElement("div"); src.className = "src"; src.textContent = c.sender;
           body.appendChild(src);
         }
-        const cnt = document.createElement("span"); cnt.className = "c"; cnt.textContent = c.count.toLocaleString("en-US");
+        const cnt = document.createElement("span"); cnt.className = "c"; cnt.textContent = c.transitions.toLocaleString("en-US");
         opt.appendChild(body); opt.appendChild(cnt);
         // Toggles + re-renders in place (does not close the dropdown) so the user can pick
         // several signals in a row; it only closes when clicking outside .chart-add-box.
@@ -3744,9 +3823,11 @@
   window.addEventListener("resize", () => { if (state.tab === "graficas") { layoutChartLanes(); requestRedraw(); } });
   wireChartInteraction();
 
-  wireLayoutToggle("toggleRailLeftBtn", ".rail-left");
+  wireLayoutToggle("toggleRailLeftBtn", ".rail-left, .rail-handle-left");
   wireLayoutToggle("toggleToolbarBtn", ".toolbar, .chart-toolbar");
-  wireLayoutToggle("toggleRailRightBtn", ".rail-right");
+  wireLayoutToggle("toggleRailRightBtn", ".rail-right, .rail-handle-right");
+  el("railHandleLeft").addEventListener("click", () => el("toggleRailLeftBtn").click());
+  el("railHandleRight").addEventListener("click", () => el("toggleRailRightBtn").click());
 
   el("aboutToggle").addEventListener("click", (e) => { e.stopPropagation(); el("aboutCard").classList.toggle("open"); });
   document.addEventListener("click", (e) => { if (!e.target.closest(".about-wrap")) el("aboutCard").classList.remove("open"); });
