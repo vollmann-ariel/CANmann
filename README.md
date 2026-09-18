@@ -24,12 +24,12 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 
 ## Plots tab
 
-- Pick any DBC-recognized signal (from the message list, the "Most Active" panel, or the search box — each showing its message, channel, and source; the search box also takes `*` as a wildcard, Escape clears/closes it) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
+- Pick any DBC-recognized signal (from the message list, the "Most Active" panel, or the search box — each showing its message, channel, and source; the search box also takes `*` as a wildcard, Escape clears/closes it, and ranks/counts results the same way as "Most Active", busiest signals first) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
 - Step line (a CAN signal holds its value until the next message).
 - Synchronized cursor across every lane, with a readout panel showing each signal's value (with its unit and DBC description) and the real timestamp of its last message — the readout stays compact (switching to scientific notation for very small magnitudes rather than showing a misleading "0"), while each lane's own header mirrors that same value at full precision. Drag a readout row to reorder its lane, or click it to jump straight there.
 - Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
 - Alternative table view for each signal, with values shown at full precision.
-- Measure the time between two points: click the ruler button, then click two spots on any chart to see the elapsed time between them.
+- Measure the time between two points: click the ruler button to open a live readout next to it — it prompts you to place the first point, ticks in real time as you hover afterward, and freezes once you click the second point.
 - Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans to center each one.
 - Right-click a lane for "Jump to time in Trace": switches tabs and selects the first message at or after that instant, across any id.
 
@@ -48,7 +48,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 ## Interface
 
 - Light/dark theme follows the OS preference automatically.
-- Toggle the left panel, toolbar, and right panel independently to make room on smaller screens.
+- The left and right panels float as translucent, blurred overlays above the trace/chart area instead of squeezing it — collapse either one from the header buttons, or from the small edge handle that stays visible (with a direction-flipping arrow) even while it's collapsed. In Trace, the search bar and message table shift to stay fully visible in the gap between whichever panels are open; in Plots, the charts always stay full width, visible (blurred) underneath the panels. The toolbar itself (search/filter row) can also be hidden independently to save vertical space.
 - Every filter/search field (Trace, Messages Seen, Most Active, Plots, DBC Edit) selects its existing text when focused, so typing replaces it directly instead of requiring it to be cleared first.
 
 ## Supported file formats
