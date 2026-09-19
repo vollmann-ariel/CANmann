@@ -28,7 +28,8 @@
     --series-7: #4a3aa7;
     --series-8: #e34948;
     --shadow: 0 1px 2px rgba(20, 22, 20, 0.06), 0 4px 16px rgba(20, 22, 20, 0.05);
-    --glass-bg: rgba(255, 255, 255, 0.45);
+    --glass-bg: rgba(255, 255, 255, 0.62);
+    --glass-bg-collapsed: rgba(255, 255, 255, 0.05);
     --glass-border: rgba(211, 215, 215, 0.65);
     color-scheme: light;
   }
@@ -60,7 +61,8 @@
       --series-7: #9085e9;
       --series-8: #e66767;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
-      --glass-bg: rgba(27, 32, 39, 0.42);
+      --glass-bg: rgba(27, 32, 39, 0.58);
+      --glass-bg-collapsed: rgba(27, 32, 39, 0.05);
       --glass-border: rgba(255, 255, 255, 0.14);
       color-scheme: dark;
     }
@@ -74,7 +76,7 @@
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
-    --glass-bg: rgba(27, 32, 39, 0.42); --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-bg: rgba(27, 32, 39, 0.58); --glass-bg-collapsed: rgba(27, 32, 39, 0.05); --glass-border: rgba(255, 255, 255, 0.14);
     color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -86,7 +88,7 @@
     --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
     --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
     --shadow: 0 1px 2px rgba(20,22,20,.06), 0 4px 16px rgba(20,22,20,.05);
-    --glass-bg: rgba(255, 255, 255, 0.45); --glass-border: rgba(211, 215, 215, 0.65);
+    --glass-bg: rgba(255, 255, 255, 0.62); --glass-bg-collapsed: rgba(255, 255, 255, 0.05); --glass-border: rgba(211, 215, 215, 0.65);
     color-scheme: light;
   }
 
@@ -191,18 +193,30 @@
      state — see .rail-handle below for the always-visible edge-docked toggle. */
   .rail {
     position: absolute; top: 0; bottom: 0; z-index: 15;
-    background: var(--glass-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+    background-color: var(--glass-bg); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
     box-shadow: var(--shadow);
     display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-    transition: transform .25s cubic-bezier(.16,1,.3,1), opacity .25s cubic-bezier(.16,1,.3,1);
+    /* Starts nearly see-through and unblurred (--glass-bg-collapsed, blur(0px)) and tints/blurs up
+       to its resting values (--glass-bg, blur(12px)) once open, instead of a plain whole-panel
+       opacity fade — the border/shadow/handle stay fully visible the whole time, only the glass
+       fill and blur ramp up together. Both are DELAYED to start near the end of the .25s slide and
+       then run their own longer, linear .5s — so the panel arrives in place first, and only then
+       does the bulk of the materialization play out, clearly separated from the slide instead of
+       racing alongside it unnoticed. */
+    transition: transform .25s cubic-bezier(.16,1,.3,1), background-color .5s linear .2s, backdrop-filter .5s linear .2s, -webkit-backdrop-filter .5s linear .2s;
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .rail { background: var(--surface); }
+    .rail { background-color: var(--surface); }
   }
   .rail-left { left: 0; width: 300px; border-right: 1px solid var(--glass-border); }
   .rail-right { right: 0; width: 340px; border-left: 1px solid var(--glass-border); }
-  .rail-left.collapsed { transform: translateX(-100%); opacity: 0; pointer-events: none; }
-  .rail-right.collapsed { transform: translateX(100%); opacity: 0; pointer-events: none; }
+  .rail-left.collapsed, .rail-right.collapsed {
+    background-color: var(--glass-bg-collapsed);
+    backdrop-filter: blur(0px) saturate(160%); -webkit-backdrop-filter: blur(0px) saturate(160%);
+    pointer-events: none;
+  }
+  .rail-left.collapsed { transform: translateX(-100%); }
+  .rail-right.collapsed { transform: translateX(100%); }
   .toolbar.collapsed, .chart-toolbar.collapsed { display: none; }
   .trace-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
   /* The toolbar row and (Trace tab only) the message table shouldn't sit under the glass rails at
@@ -219,7 +233,7 @@
   .rail-handle {
     position: absolute; top: 50%; z-index: 16;
     width: 22px; height: 56px; display: flex; align-items: center; justify-content: center;
-    background: var(--glass-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+    background: var(--glass-bg); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
     border: 1px solid var(--glass-border); box-shadow: var(--shadow); color: var(--ink-dim);
     cursor: pointer; padding: 0;
     transition: transform .25s cubic-bezier(.16,1,.3,1);
@@ -1359,7 +1373,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.6.0";
+  const APP_VERSION = "7.6.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
