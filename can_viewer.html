@@ -230,25 +230,33 @@
   #workspace:has(.rail-right.collapsed) .toolbar, #workspace:has(.rail-right.collapsed) .chart-toolbar, #workspace:has(.rail-right.collapsed) .trace-table { margin-right: 0; }
 
   /* ---------- Rail expand/collapse handle (+ Plots-only pin) ---------- */
-  /* Wraps the chevron toggle button and (Plots only) the pin button so both slide together —
-     default (no .collapsed) = expanded: flush against the rail's outer edge, the rail's own width
-     away from the wrap's edge-docked resting position. .collapsed = flush against the screen edge. */
+  /* A round disc straddling the rail's edge (half over the panel, half over the content). The
+     chevron is always a complete, standalone circle (so it looks right even when the pin isn't
+     rendered at all — Trace/DBC Edit); the pin is a smaller circular badge overlapping its
+     interior (panel-facing) edge by half its own width, tucked away until the handle is hovered
+     (or the pin is already active — see .rail-pin-btn below) so the resting handle stays a single
+     clean circle. Only the chevron ICON rotates on collapse (see .chev-h below) — the wrap itself
+     just slides, so nothing else (the pin's icon included) gets dragged into an unwanted flip. */
   .rail-handle-wrap {
-    position: absolute; top: 50%; z-index: 16;
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: absolute; top: 50%; z-index: 16; width: 34px; height: 34px;
     transition: transform .25s cubic-bezier(.16,1,.3,1);
   }
-  .rail-handle-wrap-left { left: 0; transform: translateY(-50%) translateX(300px); }
-  .rail-handle-wrap-left.collapsed { transform: translateY(-50%) translateX(0); }
-  .rail-handle-wrap-right { right: 0; transform: translateY(-50%) translateX(-340px); }
-  .rail-handle-wrap-right.collapsed { transform: translateY(-50%) translateX(0); }
+  /* Expanded straddles the RAIL's edge (283 = 300 - 17, half the disc's 34px width) — half over
+     the panel, half over real content, both meaningful. Collapsed stays fully ON-screen instead of
+     also straddling the screen's edge — half the disc would otherwise fall outside #workspace's
+     own overflow:hidden clip, shrinking the only way to reopen the panel down to a 17px sliver. */
+  .rail-handle-wrap-left { left: 0; transform: translateY(-50%) translateX(283px); }
+  .rail-handle-wrap-left.collapsed { transform: translateY(-50%) translateX(0px); }
+  .rail-handle-wrap-right { right: 0; transform: translateY(-50%) translateX(-317px); }
+  .rail-handle-wrap-right.collapsed { transform: translateY(-50%) translateX(0px); }
   /* the pin only ever matters while its panel is actually open (see #workspace.pin-left/-right
      below) — hide it the instant the panel starts collapsing rather than leaving a dead control
      floating at the screen edge. */
   .rail-handle-wrap.collapsed .rail-pin-btn { display: none; }
 
   .rail-handle {
-    width: 22px; height: 56px; display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 0; left: 0; z-index: 1;
+    width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--glass-bg); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
     border: 1px solid var(--glass-border); box-shadow: var(--shadow); color: var(--ink-dim);
     cursor: pointer; padding: 0;
@@ -258,8 +266,6 @@
   }
   .rail-handle:hover { color: var(--accent); }
   .rail-handle .chev-h { transition: transform .2s; }
-  .rail-handle-wrap-left .rail-handle { border-left: none; border-radius: 0 10px 10px 0; }
-  .rail-handle-wrap-right .rail-handle { border-right: none; border-radius: 10px 0 0 10px; }
   /* base glyph points left; collapsed = point toward screen center, expanded = point outward */
   .rail-handle-wrap-left.collapsed .chev-h { transform: rotate(180deg); }
   .rail-handle-wrap-right .chev-h { transform: rotate(180deg); }
@@ -268,15 +274,28 @@
   /* Pin: only rendered on Plots (.tab-graficas, same tab-hidden mechanism as any other tab-scoped
      element — hidden on Trace/DBC Edit, where the toolbar/table already never get covered anyway).
      Lets the user opt out of "chart stays full width, blurred under the panel" per side, reserving
-     real space instead — see #workspace.pin-left/.pin-right below for the effect itself. */
+     real space instead — see #workspace.pin-left/.pin-right below for the effect itself. Hidden
+     (scaled to nothing, not just transparent, so it can't be clicked by accident) until the user
+     hovers the handle — it then pops in with a quick scale+fade — or stays visible whenever it's
+     already pinned, so an active pin is never invisible just because the mouse moved away. */
   .rail-pin-btn {
+    position: absolute; top: 7px; z-index: 2;
     width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--glass-bg); backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
     border: 1px solid var(--glass-border); box-shadow: var(--shadow); color: var(--ink-dim);
     cursor: pointer; padding: 0;
+    opacity: 0; transform: scale(.4); pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  .rail-handle-wrap:hover .rail-pin-btn, .rail-pin-btn.pinned {
+    opacity: 1; transform: scale(1); pointer-events: auto;
   }
   .rail-pin-btn:hover { color: var(--accent); }
   .rail-pin-btn.pinned { color: var(--accent); background: var(--accent-soft); }
+  /* Since the wrap no longer rotates, each side positions the pin on its own interior (panel-
+     facing) edge explicitly instead of relying on a shared rule mirrored by rotation. */
+  .rail-handle-wrap-left .rail-pin-btn { left: -10px; }
+  .rail-handle-wrap-right .rail-pin-btn { left: 24px; }
 
   section.block { border-bottom: 1px solid var(--border); padding: 12px 14px; }
   .block h2 {
@@ -526,13 +545,11 @@
   .chart-stack { display: flex; flex-direction: column; touch-action: none; }
   /* Pinning a rail (see .rail-pin-btn) opts the chart canvas out of its default "always full width,
      blurred under the panel" behavior, reserving real space instead — same margin mechanic as
-     .toolbar/.trace-table's unconditional inset, but conditional on both being pinned AND that rail
-     actually being open right now (a pin remembered from before a later collapse shouldn't leave a
-     dead gap once the panel is no longer there to avoid). */
-  #workspace.pin-left:has(.rail-left:not(.collapsed)) .chart-scroll,
-  #workspace.pin-left:has(.rail-left:not(.collapsed)) .chart-axis-row { margin-left: 300px; }
-  #workspace.pin-right:has(.rail-right:not(.collapsed)) .chart-scroll,
-  #workspace.pin-right:has(.rail-right:not(.collapsed)) .chart-axis-row { margin-right: 340px; }
+     .toolbar/.trace-table's unconditional inset. Collapsing a panel always force-clears its own
+     pin-left/pin-right class (see unpinOnCollapse), so this never needs to check collapsed state
+     itself — pin-left/-right are only ever set while that panel is actually open. */
+  #workspace.pin-left .chart-scroll, #workspace.pin-left .chart-axis-row { margin-left: 300px; }
+  #workspace.pin-right .chart-scroll, #workspace.pin-right .chart-axis-row { margin-right: 340px; }
   .chart-empty { padding: 60px 30px; text-align: center; color: var(--ink-faint); font-size: 13px; }
 
   .chart-lane { border-bottom: 1px solid var(--border); padding: 8px 14px 10px; position: relative; }
@@ -856,19 +873,19 @@
 
   <div class="workspace" id="workspace">
     <div class="rail-handle-wrap rail-handle-wrap-left" id="railHandleWrapLeft">
-      <button type="button" class="rail-pin-btn tab-graficas" id="railPinLeft" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
-        <svg class="pin-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </button>
       <button type="button" class="rail-handle" id="railHandleLeft" title="Expandir/colapsar panel izquierdo" aria-label="Expandir/colapsar panel izquierdo">
         <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
+      <button type="button" class="rail-pin-btn tab-graficas" id="railPinLeft" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
+        <svg class="pin-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+      </button>
     </div>
     <div class="rail-handle-wrap rail-handle-wrap-right hide-in-dbcedit" id="railHandleWrapRight">
-      <button type="button" class="rail-pin-btn tab-graficas" id="railPinRight" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
-        <svg class="pin-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </button>
       <button type="button" class="rail-handle" id="railHandleRight" title="Expandir/colapsar panel derecho" aria-label="Expandir/colapsar panel derecho">
         <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <button type="button" class="rail-pin-btn tab-graficas" id="railPinRight" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
+        <svg class="pin-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
       </button>
     </div>
     <aside class="rail rail-left">
@@ -1422,7 +1439,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.7.0";
+  const APP_VERSION = "7.7.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -3908,20 +3925,33 @@
   el("railHandleRight").addEventListener("click", () => el("toggleRailRightBtn").click());
 
   // Plots-only pin: lets a panel reserve real space for the chart instead of floating over it —
-  // see the #workspace.pin-left/.pin-right CSS (.chart-scroll/.chart-axis-row margin) for the effect.
-  const PIN_ICON_PATH = '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>';
-  function togglePin(side) {
-    const cls = side === "left" ? "pin-left" : "pin-right";
+  // see the #workspace.pin-left/.pin-right CSS (.chart-scroll/.chart-axis-row margin) for the
+  // effect. Collapsing a panel always force-unpins it (see below) — pin can never be true while
+  // its panel is collapsed, so the CSS only needs to key off #workspace.pin-left/-right directly.
+  function setPinned(side, pinned) {
     const btn = el(side === "left" ? "railPinLeft" : "railPinRight");
-    const pinned = el("workspace").classList.toggle(cls);
+    el("workspace").classList.toggle(side === "left" ? "pin-left" : "pin-right", pinned);
     btn.classList.toggle("pinned", pinned);
     btn.setAttribute("aria-pressed", String(pinned));
     btn.title = pinned ? "Unpin (let the chart go under the panel again)" : "Pin (keep the chart fully visible, not covered by this panel)";
     btn.querySelector(".pin-icon").setAttribute("fill", pinned ? "currentColor" : "none");
     animateChartResize();
   }
+  function togglePin(side) {
+    setPinned(side, !el("workspace").classList.contains(side === "left" ? "pin-left" : "pin-right"));
+  }
   el("railPinLeft").addEventListener("click", (e) => { e.stopPropagation(); togglePin("left"); });
   el("railPinRight").addEventListener("click", (e) => { e.stopPropagation(); togglePin("right"); });
+  // The chevron toggle (#toggleRailLeftBtn/#toggleRailRightBtn) already flipped its own .collapsed
+  // class by the time this runs (wireLayoutToggle's listener was registered first, above) — reading
+  // it here gives the POST-toggle state, so this only fires once, right when a pinned panel collapses.
+  function unpinOnCollapse(side, toggleBtn) {
+    if (toggleBtn.classList.contains("collapsed") && el("workspace").classList.contains(side === "left" ? "pin-left" : "pin-right")) {
+      setPinned(side, false);
+    }
+  }
+  el("toggleRailLeftBtn").addEventListener("click", () => unpinOnCollapse("left", el("toggleRailLeftBtn")));
+  el("toggleRailRightBtn").addEventListener("click", () => unpinOnCollapse("right", el("toggleRailRightBtn")));
 
   el("aboutToggle").addEventListener("click", (e) => { e.stopPropagation(); el("aboutCard").classList.toggle("open"); });
   document.addEventListener("click", (e) => { if (!e.target.closest(".about-wrap")) el("aboutCard").classList.remove("open"); });
