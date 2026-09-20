@@ -1439,7 +1439,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.7.1";
+  const APP_VERSION = "7.7.2";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2373,7 +2373,7 @@
   });
 
   /* ---------- Plots area: right-click "jump to trace" context menu ---------- */
-  let chartCtxTarget = null; // { t } — the absolute timestamp under the click
+  let chartCtxTarget = null; // { t, key } — the absolute timestamp under the click and the series key of the lane it landed on (null if none)
   function openChartContextMenu(x, y, target) {
     chartCtxTarget = target;
     const menu = el("chartCtxMenu");
@@ -2394,7 +2394,7 @@
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeChartContextMenu(); });
   el("chartCtxCancel").addEventListener("click", closeChartContextMenu);
   el("chartCtxJumpTrace").addEventListener("click", () => {
-    if (chartCtxTarget) jumpToMessageInTrace(chartCtxTarget.t);
+    if (chartCtxTarget) jumpToMessageInTrace(chartCtxTarget.t, chartCtxTarget.key);
     closeChartContextMenu();
   });
 
@@ -2491,12 +2491,23 @@
     requestRedraw();
   }
 
-  // Inverso de jumpToTimeInPlots: cambia a Traza y selecciona el primer mensaje (de CUALQUIER id,
-  // no solo el de la señal graficada) con t >= al instante clickeado en el gráfico — "el mensaje
-  // inmediatamente posterior" — usando lowerBound sobre state.trace, que ya está ordenado por tiempo.
-  // Si el click cayó después del último mensaje, cae al último (no hay ninguno posterior real).
-  function jumpToMessageInTrace(t) {
+  // Inverso de jumpToTimeInPlots: cambia a Traza y selecciona el mensaje que contiene el valor
+  // VIGENTE de la señal cuyo carril recibió el click derecho — la última actualización con
+  // t <= al instante clickeado, vía valueAtTime (la misma función que calcula el valor mostrado
+  // en el header del carril al pasar el mouse). Si el click cayó antes de la primera muestra de
+  // esa señal, cae en la primera disponible (no hay "vigente" real todavía). key es null solo si
+  // por algún motivo no se pudo determinar el carril (no debería pasar: layoutChartLanes estira
+  // los carriles para ocupar todo el alto visible) — ahí se preserva el viejo comportamiento de
+  // "primer mensaje de cualquier id con t >= click".
+  function jumpToMessageInTrace(t, key) {
     if (state.trace.length === 0) return;
+    const series = key && state.chart.series.get(key);
+    if (series && series.points.length > 0) {
+      const point = valueAtTime(series.points, t) || series.points[0];
+      setTab("traza");
+      selectRow(point.rowIdx, true);
+      return;
+    }
     const idx = Math.min(lowerBound(state.trace, t), state.trace.length - 1);
     setTab("traza");
     selectRow(idx, true);
@@ -2909,7 +2920,7 @@
       if (!decoded) continue;
       const sig = decoded.signals.find((s) => s.name === signalName);
       if (!sig) continue; // rama de mux inactiva o señal fuera de rango en este frame — hueco en la serie
-      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
+      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label, rowIdx: i });
     }
     // Un mensaje J1939 TP reensamblado (RC_0F, EC1_00, ...) nunca coincide con el loop de arriba —
     // su id declarado no existe tal cual en ninguna fila del trace crudo — así que sus puntos salen
@@ -2920,7 +2931,7 @@
       const decoded = decodeMessage(tpEntry.dbc, tpEntry.msg.id, tpEntry.data);
       const sig = decoded.signals.find((s) => s.name === signalName);
       if (!sig) continue;
-      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label });
+      points.push({ t: r.t, raw: sig.raw, value: sig.value, label: sig.label, rowIdx });
     }
     if (points.length > 1) points.sort((a, b) => a.t - b.t); // por si ambas fuentes se combinaron fuera de orden
     return {
@@ -3156,6 +3167,7 @@
       const s = state.chart.series.get(key);
       const lane = document.createElement("div");
       lane.className = "chart-lane";
+      lane.dataset.key = key; // usado por el menú contextual "Jump to time in Trace" para saber sobre qué señal se clickeó
       lane.innerHTML = `
         <div class="chart-lane-head">
           <span class="swatch" style="background:var(${s.colorVar})"></span>
@@ -3716,7 +3728,8 @@
       if (!rect) return;
       e.preventDefault();
       const x = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
-      openChartContextMenu(e.clientX, e.clientY, { t: xToT(x, rect.width) });
+      const laneEl = e.target.closest(".chart-lane");
+      openChartContextMenu(e.clientX, e.clientY, { t: xToT(x, rect.width), key: laneEl ? laneEl.dataset.key : null });
     });
     stack.addEventListener("wheel", (e) => {
       if (state.chart.tableView || !state.chart.range) return;
