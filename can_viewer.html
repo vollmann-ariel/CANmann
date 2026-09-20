@@ -1109,7 +1109,7 @@
 </div>
 
 <div class="ctx-menu" id="chartCtxMenu" role="menu">
-  <button type="button" class="ctx-menu-item" id="chartCtxJumpTrace" role="menuitem">Jump to time in Trace</button>
+  <button type="button" class="ctx-menu-item" id="chartCtxJumpTrace" role="menuitem">Jump to message in Trace</button>
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="chartCtxCancel" role="menuitem">Cancel</button>
 </div>
 
@@ -1444,7 +1444,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.9.0";
+  const APP_VERSION = "7.9.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2508,9 +2508,11 @@
   // esa señal, cae en la primera disponible (no hay "vigente" real todavía). key es null solo si
   // por algún motivo no se pudo determinar el carril (no debería pasar: layoutChartLanes estira
   // los carriles para ocupar todo el alto visible) — ahí se preserva el viejo comportamiento de
-  // "primer mensaje de cualquier id con t >= click".
+  // "primer mensaje de cualquier id con t >= click". Limpia los filtros de Trace antes de
+  // seleccionar: si quedaran aplicados podrían ocultar la fila a la que se quiere saltar.
   function jumpToMessageInTrace(t, key) {
     if (state.trace.length === 0) return;
+    clearTraceFilters(); // un filtro activo podría estar ocultando el mensaje al que se quiere saltar
     const series = key && state.chart.series.get(key);
     if (series && series.points.length > 0) {
       const point = valueAtTime(series.points, t) || series.points[0];
@@ -2629,6 +2631,15 @@
     applyFilter();
   }
 
+  // Vacía los tres filtros de Trace (texto + Decoded/Undecoded only) y reaplica — usado antes de
+  // saltar a un mensaje puntual (jumpToMessageInTrace), ya que un filtro activo podría ocultarlo.
+  function clearTraceFilters() {
+    el("traceSearch").value = "";
+    el("onlyDecoded").checked = false;
+    el("onlyUndecoded").checked = false;
+    applyFilter();
+  }
+
   /* ---------- filtering ---------- */
   function applyFilter() {
     const qRaw = (el("traceSearch").value || "").trim();
@@ -2660,6 +2671,10 @@
     }
     updateResultCount();
     rebuildVirtualList();
+    // El mensaje seleccionado puede quedar fuera del área visible al cambiar el filtro (las
+    // posiciones dentro de la tabla virtualizada se recalculan); volver a encuadrarlo si sigue
+    // presente en el resultado (scrollRowIntoView ya es un no-op si quedó filtrado afuera).
+    if (state.selectedRow !== null) scrollRowIntoView(state.selectedRow);
   }
 
   function updateResultCount() {
@@ -3177,7 +3192,7 @@
       const s = state.chart.series.get(key);
       const lane = document.createElement("div");
       lane.className = "chart-lane";
-      lane.dataset.key = key; // usado por el menú contextual "Jump to time in Trace" para saber sobre qué señal se clickeó
+      lane.dataset.key = key; // usado por el menú contextual "Jump to message in Trace" para saber sobre qué señal se clickeó
       lane.innerHTML = `
         <div class="chart-lane-head">
           <span class="swatch" style="background:var(${s.colorVar})"></span>
