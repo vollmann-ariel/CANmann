@@ -877,7 +877,7 @@
 
   <div class="workspace" id="workspace">
     <div class="rail-handle-wrap rail-handle-wrap-left" id="railHandleWrapLeft">
-      <button type="button" class="rail-handle" id="railHandleLeft" title="Expandir/colapsar panel izquierdo" aria-label="Expandir/colapsar panel izquierdo">
+      <button type="button" class="rail-handle" id="railHandleLeft" title="Expand/collapse left panel" aria-label="Expand/collapse left panel">
         <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
       <button type="button" class="rail-pin-btn tab-graficas" id="railPinLeft" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
@@ -885,7 +885,7 @@
       </button>
     </div>
     <div class="rail-handle-wrap rail-handle-wrap-right hide-in-dbcedit" id="railHandleWrapRight">
-      <button type="button" class="rail-handle" id="railHandleRight" title="Expandir/colapsar panel derecho" aria-label="Expandir/colapsar panel derecho">
+      <button type="button" class="rail-handle" id="railHandleRight" title="Expand/collapse right panel" aria-label="Expand/collapse right panel">
         <svg class="chev-h" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
       <button type="button" class="rail-pin-btn tab-graficas" id="railPinRight" title="Pin: keep the chart fully visible instead of covered by this panel" aria-label="Pin panel" aria-pressed="false">
@@ -1444,7 +1444,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.9.1";
+  const APP_VERSION = "7.9.2";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
