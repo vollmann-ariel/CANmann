@@ -567,7 +567,7 @@
   .chart-lane-head button:hover { color: var(--critical); background: var(--surface-2); }
 
   .chart-lane-trigger { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; min-height: 20px; margin: 0 0 4px; }
-  .chart-lane-trigger .trig-add { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 10.5px; padding: 2px 4px; border-radius: 4px; }
+  .chart-lane-trigger .trig-add { background: none; border: 1px solid var(--border); color: var(--ink-faint); cursor: pointer; font-size: 10.5px; padding: 3px 7px; border-radius: 5px; }
   .chart-lane-trigger .trig-add:hover { color: var(--accent); background: var(--surface-2); }
   .chart-lane-trigger select, .chart-lane-trigger input[type="number"] {
     padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font-size: 11px;
@@ -580,8 +580,9 @@
   .chart-lane-trigger .trig-chip { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--critical); }
   .chart-lane-trigger .trig-chip .tri { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--critical); }
   .chart-lane-trigger .trig-step { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; font-family: "Cascadia Code", Consolas, monospace; color: var(--ink-faint); }
-  .chart-lane-trigger .trig-step button { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-size: 12px; padding: 0 3px; }
-  .chart-lane-trigger .trig-step button:disabled { color: var(--ink-faint); opacity: .4; cursor: default; }
+  .chart-lane-trigger .trig-step button { background: none; border: 1px solid var(--border); border-radius: 5px; color: var(--ink-dim); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+  .chart-lane-trigger .trig-step button:hover { background: var(--surface-2); }
+  .chart-lane-trigger .trig-step button:disabled { color: var(--ink-faint); opacity: .4; cursor: default; background: none; }
   .chart-lane-trigger .trig-clear:hover { color: var(--critical); }
   .chart-lane canvas { display: block; width: 100%; height: 92px; cursor: crosshair; }
   .chart-lane-table { max-height: 260px; overflow-y: auto; }
@@ -1444,7 +1445,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.9.2";
+  const APP_VERSION = "7.10.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -3085,18 +3086,39 @@
     s.triggerEvents = events;
     s.triggerEventIdx = -1;
   }
+  // Anima el pan del rango visible desde el actual hasta [t0,t1] (mismo span, solo se recentra),
+  // en vez de saltar de golpe — usado cuando un salto (trigger prev/next, "Jump to time in Plots")
+  // cae fuera del área visible. rangeAnimId invalida cualquier animación anterior todavía en vuelo
+  // (un salto nuevo, o que el usuario arrastre el gráfico, la cortan sin pelear por el mismo rango).
+  let rangeAnimId = 0;
+  function animateRangeTo(t0, t1, duration = 300) {
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || !state.chart.range) { setRangeClamped(t0, t1); requestRedraw(); return; }
+    const startRange = { ...state.chart.range };
+    const start = performance.now();
+    const myId = ++rangeAnimId;
+    function step(now) {
+      if (myId !== rangeAnimId || state.chart.drag) return;
+      const p = Math.min(1, (now - start) / duration);
+      const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // ease-in-out cubic: acelera y frena
+      setRangeClamped(startRange.t0 + (t0 - startRange.t0) * eased, startRange.t1 + (t1 - startRange.t1) * eased);
+      requestRedraw();
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   function focusRangeOnTime(t) {
     const { range } = state.chart;
     if (range && t >= range.t0 && t <= range.t1) return; // ya visible, no pisar el zoom/pan actual del usuario
     const span = range ? range.t1 - range.t0 : 0;
-    setRangeClamped(t - span / 2, t + span / 2);
+    animateRangeTo(t - span / 2, t + span / 2);
   }
   function stepTriggerEvent(s, dir) {
     if (s.triggerEvents.length === 0) return;
     const maxIdx = s.triggerEvents.length - 1;
     s.triggerEventIdx = dir > 0 ? Math.min(s.triggerEventIdx + 1, maxIdx) : Math.max(s.triggerEventIdx - 1, 0);
     const event = s.triggerEvents[s.triggerEventIdx];
-    state.chart.hoverT = event.t;
+    state.chart.jumpMarkerT = event.t; // fija el cursor ahí (mismo marcador que un click simple) en vez de solo mover hoverT, que un mousemove posterior pisaría
     focusRangeOnTime(event.t);
     requestRedraw();
     renderTriggerRow(s);
