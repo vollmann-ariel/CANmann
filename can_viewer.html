@@ -243,13 +243,16 @@
     position: absolute; top: 50%; z-index: 16; width: 34px; height: 34px;
     transition: transform .25s cubic-bezier(.16,1,.3,1);
   }
-  /* Expanded straddles the RAIL's edge (283 = 300 - 17, half the disc's 34px width) — half over
-     the panel, half over real content, both meaningful. Collapsed stays fully ON-screen instead of
-     also straddling the screen's edge — half the disc would otherwise fall outside #workspace's
-     own overflow:hidden clip, shrinking the only way to reopen the panel down to a 17px sliver. */
+  /* Expanded straddles the RAIL's edge — half over the panel, half over real content, both
+     meaningful. The wrap is anchored to its own side (left:0 / right:0), so its centre starts 17px
+     (half the disc's 34px width) in from that side and the offset is rail width - 17: the left rail
+     is 300px wide -> 283, the right rail is 340px wide -> -323. Keep these in sync with .rail-left/
+     .rail-right's widths. Collapsed stays fully ON-screen instead of also straddling the screen's
+     edge — half the disc would otherwise fall outside #workspace's own overflow:hidden clip,
+     shrinking the only way to reopen the panel down to a 17px sliver. */
   .rail-handle-wrap-left { left: 0; transform: translateY(-50%) translateX(283px); }
   .rail-handle-wrap-left.collapsed { transform: translateY(-50%) translateX(0px); }
-  .rail-handle-wrap-right { right: 0; transform: translateY(-50%) translateX(-317px); }
+  .rail-handle-wrap-right { right: 0; transform: translateY(-50%) translateX(-323px); }
   .rail-handle-wrap-right.collapsed { transform: translateY(-50%) translateX(0px); }
   /* the pin only ever matters while its panel is actually open (see #workspace.pin-left/-right
      below) — hide it the instant the panel starts collapsing rather than leaving a dead control
@@ -561,6 +564,10 @@
   .chart-lane-head .lmeta { font-size: 10px; color: var(--ink-faint); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chart-lane-head .lval { font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; }
   .chart-lane-head .lval .u { color: var(--ink-faint); font-weight: 600; font-size: 10px; margin-left: 3px; }
+  .chart-lane-head .ldelta { font-size: 12px; font-weight: 700; color: var(--cyan); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chart-lane-head .ldelta:empty { display: none; }
+  .chart-lane-head .ldelta .u { font-weight: 600; font-size: 10px; margin-left: 3px; opacity: .7; }
+  .chart-lane-head .ldelta.na { color: var(--ink-faint); }
   .chart-lane-head button {
     flex: 0 0 auto; background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 13px;
   }
@@ -1033,7 +1040,7 @@
         <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
-        <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time between two points">
+        <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time and value change between two points">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="measureIcon"><path d="M4 12h16M4 8v8M20 8v8"/></svg>
         </button>
         <div class="chart-measure-readout" id="chartMeasureReadout"></div>
@@ -1445,7 +1452,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.10.0";
+  const APP_VERSION = "7.11.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -3221,13 +3228,14 @@
           <span class="lname">${escapeHtml(s.signalName)}</span>
           <span class="lmeta">${escapeHtml(s.msgName)}${s.sender ? " · " + escapeHtml(s.sender) : ""}${s.comment ? " — " + escapeHtml(s.comment) : ""}</span>
           <span class="lval"></span>
+          <span class="ldelta"></span>
           <button type="button" title="Remove">✕</button>
         </div>
         <div class="chart-lane-trigger"></div>
         <div class="chart-lane-body"></div>`;
       lane.querySelector("button").onclick = () => removeSignalFromChart(key);
       s.el = {
-        lane, lval: lane.querySelector(".lval"), body: lane.querySelector(".chart-lane-body"),
+        lane, lval: lane.querySelector(".lval"), ldelta: lane.querySelector(".ldelta"), body: lane.querySelector(".chart-lane-body"),
         triggerRow: lane.querySelector(".chart-lane-trigger"), canvas: null, ctx: null,
       };
       renderTriggerRow(s);
@@ -3622,6 +3630,17 @@
       renderValueWithUnit(val, vp, s.unit);
       top.appendChild(swatch); top.appendChild(name); top.appendChild(val);
       row.appendChild(top);
+      if (s.el && s.el.ldelta) {
+        const delta = measureDeltaFor(s);
+        s.el.ldelta.textContent = "";
+        s.el.ldelta.classList.toggle("na", !!(delta && delta.unavailable));
+        if (delta) renderDelta(s.el.ldelta, delta, s.unit);
+        s.el.ldelta.title = delta ? delta.tooltip : "";
+        // Con los dos puntos marcados el chip reemplaza al valor instantáneo (que a esa altura ya
+        // no aporta: el cursor no define nada). En vivo, o sin delta calculable (enum, extremo
+        // sin valor numérico), el valor instantáneo se queda.
+        s.el.lval.hidden = !!(delta && !delta.unavailable && !delta.live);
+      }
       if (vp) {
         const meta = document.createElement("div"); meta.className = "rmeta";
         meta.textContent = "last message: t = " + (vp.t - state.t0).toFixed(4) + "s";
@@ -3648,6 +3667,45 @@
     if (unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = unit; target.appendChild(u); }
   }
 
+  // Δ valor de una señal entre los dos puntos de Measure: valor final - valor inicial en orden
+  // temporal (igual que Δt: no depende de cuál punto se clickeó primero). Con solo el punto 1
+  // puesto se calcula en vivo contra el cursor. null si no aplica (Measure inactivo, sin punto o
+  // cursor, o señal enum: restar "Enabled" - "Disabled" no tiene sentido). { unavailable } si la
+  // señal es numérica pero un extremo no es restable: todavía sin muestra, o con etiqueta de tabla
+  // de valores (ej. "Error"/"N/A" de J1939 en una señal continua).
+  function measureDeltaFor(s) {
+    const m = state.chart.measure;
+    if (!m.active || m.t1 === null) return null;
+    if (s.sigDef && isEnumSignal(s.sigDef)) return null;
+    const live = m.t2 === null;
+    const other = live ? state.chart.hoverT : m.t2;
+    if (other === null) return null;
+    const ta = Math.min(m.t1, other), tb = Math.max(m.t1, other);
+    const a = valueAtTime(s.points, ta), b = valueAtTime(s.points, tb);
+    const at = (t) => "t = " + (t - state.t0).toFixed(4) + "s";
+    const suffix = live ? " · live, vs cursor" : "";
+    if (!a || !b) return { live, unavailable: true, tooltip: "No value yet at " + at(!a ? ta : tb) + suffix };
+    const bad = a.label !== null ? a : b.label !== null ? b : null;
+    if (bad) return { live, unavailable: true, tooltip: '"' + bad.label + '" at ' + at(bad === a ? ta : tb) + " — not a numeric value" + suffix };
+    return {
+      live, value: b.value - a.value, from: a.value, to: b.value,
+      tooltip: formatNum(a.value) + " at " + at(ta) + " → " + formatNum(b.value) + " at " + at(tb) +
+        " · Δ = " + (b.value - a.value > 0 ? "+" : "") + formatNum(b.value - a.value) + suffix,
+    };
+  }
+
+  // Fills the lane header's delta chip with a measureDeltaFor result as "inicial → final (Δ ±delta)"
+  // ("0.05 → 0 bar (Δ −0.05)"), with a trailing "…" while live. La flecha deja claro de dónde parte
+  // la medición y dónde termina, y el Δ rotulado evita que el cambio se lea como un valor más.
+  function renderDelta(target, d, unit) {
+    target.textContent = "";
+    if (d.unavailable) { target.textContent = "Δ —"; return; }
+    target.textContent = formatNum(d.from) + " → " + formatNum(d.to);
+    if (unit) { const u = document.createElement("span"); u.className = "u"; u.textContent = unit; target.appendChild(u); }
+    const sign = d.value > 0 ? "+" : d.value < 0 ? "−" : "";
+    target.appendChild(document.createTextNode(" (Δ " + sign + formatNum(Math.abs(d.value)) + ")" + (d.live ? "…" : "")));
+  }
+
   function scrollToLane(key) {
     const s = state.chart.series.get(key);
     if (!s || !s.el || !s.el.lane) return;
@@ -3663,7 +3721,7 @@
   function setMeasureActive(active) {
     state.chart.measure = { active, t1: null, t2: null };
     el("chartMeasureBtn").classList.toggle("measuring", active);
-    el("chartMeasureBtn").title = active ? "Cancel measurement" : "Measure time between two points";
+    el("chartMeasureBtn").title = active ? "Cancel measurement" : "Measure time and value change between two points";
     el("measureIcon").innerHTML = active ? '<path d="M6 6l12 12M18 6L6 18"/>' : '<path d="M4 12h16M4 8v8M20 8v8"/>';
     requestRedraw();
   }
